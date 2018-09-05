@@ -34,7 +34,8 @@ int init_socket(xripd_settings_t *xripd_settings) {
 	// Socket address vars:
 	uint16_t bind_port = RIP_UDP_PORT;
 	struct sockaddr_in bind_address;
-	struct in_addr mcast_ip;
+
+	struct ip_mreq mcast_group;
 
 	// Initiate Socket:
 	xripd_settings->sd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -51,16 +52,44 @@ int init_socket(xripd_settings_t *xripd_settings) {
 		return 1;
 	}
 
+	// Set SO_REUSEADDR onto the mcast socket:
+	int reuse = 1;
+	if ( setsockopt(xripd_settings->sd, SOL_SOCKET, SO_REUSEADDR, (char *) &reuse, sizeof(reuse)) == -1 ){
+		close(xripd_settings->sd);
+		fprintf(stderr, "Error: Unable to set SO_REUSEADDR on socket\n");
+		return 1;
+	}
+
+	// Acquire IP Address:
+	if ( ioctl(xripd_settings->sd, SIOCGIFADDR, &ifrq)  == -1 ){
+		close(xripd_settings->sd);
+		fprintf(stderr, "Error: Unable to get IP Address of %s\n", xripd_settings->iface_name);
+		return 1;
+	}
+
 	// Convert the presentation string for RIP_MCAST_IP into a network object:
 	// Format our bind address struct:
-	inet_pton(AF_INET, "RIP_MCAST_IP", &mcast_ip.s_addr);
-	bind_address.sin_addr.s_addr = mcast_ip.s_addr;
+	//bind_address.sin_addr.s_addr = mcast_ip.s_addr;
+	bind_address.sin_addr.s_addr = ((struct sockaddr_in *)&ifrq.ifr_addr)->sin_addr.s_addr;
 	bind_address.sin_family = AF_INET;
 	bind_address.sin_port = htons(bind_port);
 
 	if ( bind(xripd_settings->sd, (const struct sockaddr *)(&bind_address), sizeof(bind_address)) == -1 ){
 		close(xripd_settings->sd);
 		fprintf(stderr, "Error: Unable to bind the RIPv2 MCAST IP + UDP Port to socket\n");
+		return 1;
+	}
+
+	// Populate our mcast group ips:
+	mcast_group.imr_multiaddr.s_addr = inet_addr("224.0.0.9");
+	mcast_group.imr_interface.s_addr = ((struct sockaddr_in *)&ifrq.ifr_addr)->sin_addr.s_addr;
+
+	// Add mcast membership for our RIPv2 MCAST group:
+	int ret = setsockopt(xripd_settings->sd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mcast_group, sizeof(mcast_group));
+	if ( ret == -1 ) {
+		perror("setsockopt");
+		close(xripd_settings->sd);
+		fprintf(stderr, "Error: Unable to set socket option IP_ADD_MEMBERSHIP on socket\n");
 		return 1;
 	}
 
@@ -94,6 +123,10 @@ int main(void) {
 
 	if ( init_socket(xripd_settings) != 0)
 		return 1;
+
+	while(1) {
+		sleep(10);
+	}
 
 	return 0;
 }
