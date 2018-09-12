@@ -69,8 +69,9 @@ int init_socket(xripd_settings_t *xripd_settings) {
 
 	// Convert the presentation string for RIP_MCAST_IP into a network object:
 	// Format our bind address struct:
-	//bind_address.sin_addr.s_addr = mcast_ip.s_addr;
-	bind_address.sin_addr.s_addr = ((struct sockaddr_in *)&ifrq.ifr_addr)->sin_addr.s_addr;
+
+	// bind_address.sin_addr.s_addr = ((struct sockaddr_in *)&ifrq.ifr_addr)->sin_addr.s_addr;
+	bind_address.sin_addr.s_addr = inet_addr("224.0.0.9");
 	bind_address.sin_family = AF_INET;
 	bind_address.sin_port = htons(bind_port);
 
@@ -79,6 +80,8 @@ int init_socket(xripd_settings_t *xripd_settings) {
 		fprintf(stderr, "Error: Unable to bind the RIPv2 MCAST IP + UDP Port to socket\n");
 		return 1;
 	}
+
+	printf("Bound IP: %s\n", inet_ntoa(bind_address.sin_addr));
 
 	// Populate our mcast group ips:
 	mcast_group.imr_multiaddr.s_addr = inet_addr("224.0.0.9");
@@ -92,6 +95,8 @@ int init_socket(xripd_settings_t *xripd_settings) {
 		fprintf(stderr, "Error: Unable to set socket option IP_ADD_MEMBERSHIP on socket\n");
 		return 1;
 	}
+
+	printf("Added Membership to MCAST IP: %s\n", inet_ntoa(mcast_group.imr_multiaddr));
 
 	return 0;
 }
@@ -114,6 +119,35 @@ xripd_settings_t *init_xripd_settings() {
 	return xripd_settings;
 }
 
+int xripd_listen_loop(xripd_settings_t *xripd_settings) {
+
+	int len = 0;
+	char receive_buffer[512];
+	memset(&receive_buffer, 0, 512);
+
+	char hex_dump[(512 * 2) + 1];
+	char *hex_ptr = &hex_dump[0];
+
+	while(1) {
+
+		printf("Loop\n");
+		if ((len = recv(xripd_settings->sd, receive_buffer, 512, 0)) == -1) {
+			perror("recv");
+		} else {
+			int i = 0;
+			for (i = 0; i <= len; i++) {
+				hex_ptr += sprintf(hex_ptr, "%02X", receive_buffer[i]);
+			}
+			hex_dump[i] = '\0';
+			printf("%s\n", hex_dump);
+			fflush(stdout);
+		}
+		sleep(2);
+	}
+
+	return 0;
+}
+
 int main(void) {
 
 	xripd_settings_t *xripd_settings = init_xripd_settings();
@@ -124,9 +158,7 @@ int main(void) {
 	if ( init_socket(xripd_settings) != 0)
 		return 1;
 
-	while(1) {
-		sleep(10);
-	}
+	xripd_listen_loop(xripd_settings);
 
 	return 0;
 }
