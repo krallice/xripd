@@ -27,8 +27,8 @@ typedef struct xripd_settings_t {
 	int iface_index; 		// Kernel index id for interface
 } xripd_settings_t;
 
-// RIP Message Format
 // https://tools.ietf.org/html/rfc2453
+// RIP Message Format:
 // RIP Header:
 typedef struct rip_msg_header_t {
 	uint8_t command;
@@ -45,6 +45,12 @@ typedef struct rip_msg_entry_t {
 	uint32_t nexthop;
 	uint32_t metric;
 } rip_msg_entry_t;
+
+// Structure to pass into the rib:
+typedef struct rip_rib_entry_t {
+	struct sockaddr_in recv_from;
+	rip_msg_entry_t rip_entry;
+} rip_rib_entry_t;
 
 int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 
@@ -172,12 +178,13 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 
 			rip_msg_header_t *msg_header = (rip_msg_header_t *)receive_buffer;
 
+			char source_address_p[16];
+			inet_ntop(AF_INET, &source_address.sin_addr, source_address_p, sizeof(source_address_p));
+
+
 			if ( msg_header->version == RIP_SUPPORTED_VERSION ) {
 				// RESPONSE is the only supported command at the moment:
 				if ( msg_header->command == RIP_HEADER_RESPONSE ) {
-
-					char source_address_p[16];
-					inet_ntop(AF_INET, &source_address.sin_addr, source_address_p, sizeof(source_address_p));
 
 					// Progressively scan through our buffer at interfaves of RIP_MESSAGE_SIZE
 					int len_remaining = len - sizeof(rip_msg_header_t);
@@ -201,12 +208,12 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 					}
 				} else {
 #if XRIPD_DEBUG == 1
-				fprintf(stderr, "Received unsupported RIP Command: %02X\n", msg_header->command);
+				fprintf(stderr, "Received unsupported RIP Command: %02X from %s\n", msg_header->command, source_address_p);
 #endif
 				}
 			} else {
 #if XRIPD_DEBUG == 1
-				fprintf(stderr, "Received unsupported RIP Version: %02X Message\n", msg_header->version);
+				fprintf(stderr, "Received unsupported RIP Version: %02X Message from %s\n", msg_header->version, source_address_p);
 #endif
 			}
 		}
