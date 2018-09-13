@@ -8,6 +8,8 @@
 #define RIP_MCAST_IP 224.0.0.9
 #define RIP_UDP_PORT 520
 
+#define RIP_SUPPORTED_VERSION 2
+
 #define RIP_DATAGRAM_SIZE 512
 #define RIP_ENTRY_SIZE 20
 
@@ -38,8 +40,8 @@ typedef struct rip_msg_header_t {
 typedef struct rip_msg_entry_t {
 	uint16_t afi;
 	uint16_t tag;
-	struct in_addr ipaddr;
-	struct in_addr subnet;
+	uint32_t ipaddr;
+	uint32_t subnet;
 	uint32_t nexthop;
 	uint32_t metric;
 } rip_msg_entry_t;
@@ -164,21 +166,45 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 		if ((len = recv(xripd_settings->sd, receive_buffer, RIP_DATAGRAM_SIZE, 0)) == -1) {
 			perror("recv");
 		} else {
+
 			rip_msg_header_t *msg_header = (rip_msg_header_t *)receive_buffer;
-			int len_remaining = len - sizeof(rip_msg_header_t);
 
-			printf("Received MSG with Command: %02X Version: %02X Total Size: %d Entry Size: %d\n", msg_header->command, msg_header->version, len, len_remaining);
+			if ( msg_header->version == RIP_SUPPORTED_VERSION ) {
+				// RESPONSE is the only supported command at the moment:
+				if ( msg_header->command == RIP_HEADER_RESPONSE ) {
 
-			int i = 0;
-			while (i < len_remaining) {
-				rip_msg_entry_t *rip_entry = (rip_msg_entry_t *)(receive_buffer + sizeof(rip_msg_header_t) + i);
-				printf("Entry\n");
-				i += RIP_ENTRY_SIZE;
+					// Progressively scan through our buffer at interfaves of RIP_MESSAGE_SIZE
+					int len_remaining = len - sizeof(rip_msg_header_t);
+					int i = 0;
+#if XRIPD_DEBUG == 1
+					fprintf(stderr, "Received RIPv2 RESPONSE Message (Command: %02X) Total Message Size: %d Entry(ies) Size: %d\n", msg_header->command, len, len_remaining);
+#endif
+					while (i <= (len_remaining - RIP_ENTRY_SIZE)) {
+						rip_msg_entry_t *rip_entry = (rip_msg_entry_t *)(receive_buffer + sizeof(rip_msg_header_t) + i);
+#if XRIPD_DEBUG == 1
+						char ipaddr[16];
+						inet_ntop(AF_INET, &rip_entry->ipaddr, ipaddr, sizeof(ipaddr));
+						char subnet[16];
+						inet_ntop(AF_INET, &rip_entry->subnet, subnet, sizeof(subnet));
+						char nexthop[16];
+						inet_ntop(AF_INET, &rip_entry->nexthop, nexthop, sizeof(nexthop));
+
+						fprintf(stderr, "\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
+#endif
+						i += RIP_ENTRY_SIZE;
+					}
+				} else {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "Received unsupported RIP Command: %02X\n", msg_header->command);
+#endif
+				}
+			} else {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "Received unsupported RIP Version: %02X Message\n", msg_header->version);
+#endif
 			}
-			fflush(stdout);
 		}
 	}
-
 	return 0;
 }
 
