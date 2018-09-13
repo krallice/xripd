@@ -1,17 +1,44 @@
 #include "xripd.h"
 
 // xripd Defines:
-#define XRIPD_PASSIVE_IFACE "enp0s8"
+#define XRIPD_PASSIVE_IFACE "eth0"
 
-// Protocol Defines:
+// RIP Protocol Defines:
+
 #define RIP_MCAST_IP 224.0.0.9
+#define RIP_DATAGRAM_SIZE 512
 #define RIP_UDP_PORT 520
 
+#define RIP_HEADER_REQUEST 1
+#define RIP_HEADER_RESPONSE 2
+
+#define RIP_AFI_INET 2
+
+// Daemon Settings Structure:
 typedef struct xripd_settings_t {
 	int sd; 			// Socket Descriptor
 	char iface_name[IFNAMSIZ]; 	// Human String for an interface, ie. "eth3" or "enp0s3"
 	int iface_index; 		// Kernel index id for interface
 } xripd_settings_t;
+
+// RIP Message Format
+// https://tools.ietf.org/html/rfc2453
+// RIP Header:
+typedef struct rip_msg_header_t {
+	uint8_t command;
+	uint8_t version;
+	uint16_t zero;
+} rip_msg_header_t;
+
+// Each RIP Message may include 1-25 RIP Entries (RTEs):
+typedef struct rip_msg_entry_t {
+	uint16_t afi;
+	uint16_t tag;
+	struct in_addr ipaddr;
+	struct in_addr subnet;
+	uint32_t nexthop;
+	uint32_t metric;
+} rip_msg_entry_t;
 
 int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 
@@ -125,21 +152,11 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 	char receive_buffer[512];
 	memset(&receive_buffer, 0, 512);
 
-	char hex_dump[(512 * 2) + 1];
-	char *hex_ptr = &hex_dump[0];
-
 	while(1) {
 
-		printf("Loop\n");
 		if ((len = recv(xripd_settings->sd, receive_buffer, 512, 0)) == -1) {
 			perror("recv");
 		} else {
-			int i = 0;
-			for (i = 0; i <= len; i++) {
-				hex_ptr += sprintf(hex_ptr, "%02X", receive_buffer[i]);
-			}
-			hex_dump[i] = '\0';
-			printf("%s\n", hex_dump);
 			fflush(stdout);
 		}
 		sleep(2);
