@@ -1,17 +1,21 @@
 #include "xripd.h"
 
 // xripd Defines:
-#define XRIPD_PASSIVE_IFACE "eth0"
+#define XRIPD_PASSIVE_IFACE "enp0s8"
+#define XRIPD_DEBUG 0x01
 
 // RIP Protocol Defines:
-
 #define RIP_MCAST_IP 224.0.0.9
-#define RIP_DATAGRAM_SIZE 512
 #define RIP_UDP_PORT 520
 
+#define RIP_DATAGRAM_SIZE 512
+#define RIP_ENTRY_SIZE 20
+
+// RIP Header Defines:
 #define RIP_HEADER_REQUEST 1
 #define RIP_HEADER_RESPONSE 2
 
+// RIP Entry Defines:
 #define RIP_AFI_INET 2
 
 // Daemon Settings Structure:
@@ -149,17 +153,30 @@ xripd_settings_t *init_xripd_settings() {
 int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 
 	int len = 0;
-	char receive_buffer[512];
-	memset(&receive_buffer, 0, 512);
+	char receive_buffer[RIP_DATAGRAM_SIZE];
+	memset(&receive_buffer, 0, RIP_DATAGRAM_SIZE);
 
 	while(1) {
-
-		if ((len = recv(xripd_settings->sd, receive_buffer, 512, 0)) == -1) {
+#if XRIPD_DEBUG == 1
+		fprintf(stderr, "Starting Listen Loop\n");
+		fflush(stderr);
+#endif
+		if ((len = recv(xripd_settings->sd, receive_buffer, RIP_DATAGRAM_SIZE, 0)) == -1) {
 			perror("recv");
 		} else {
+			rip_msg_header_t *msg_header = (rip_msg_header_t *)receive_buffer;
+			int len_remaining = len - sizeof(rip_msg_header_t);
+
+			printf("Received MSG with Command: %02X Version: %02X Total Size: %d Entry Size: %d\n", msg_header->command, msg_header->version, len, len_remaining);
+
+			int i = 0;
+			while (i < len_remaining) {
+				rip_msg_entry_t *rip_entry = (rip_msg_entry_t *)(receive_buffer + sizeof(rip_msg_header_t) + i);
+				printf("Entry\n");
+				i += RIP_ENTRY_SIZE;
+			}
 			fflush(stdout);
 		}
-		sleep(2);
 	}
 
 	return 0;
