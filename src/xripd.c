@@ -158,12 +158,15 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 	char receive_buffer[RIP_DATAGRAM_SIZE];
 	memset(&receive_buffer, 0, RIP_DATAGRAM_SIZE);
 
+	struct sockaddr_in source_address;
+	uint32_t source_address_len = sizeof(source_address);
+
 	while(1) {
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "Starting Listen Loop\n");
 		fflush(stderr);
 #endif
-		if ((len = recv(xripd_settings->sd, receive_buffer, RIP_DATAGRAM_SIZE, 0)) == -1) {
+		if ((len = recvfrom(xripd_settings->sd, receive_buffer, RIP_DATAGRAM_SIZE, 0, (struct sockaddr *)&source_address, &source_address_len)) == -1) {
 			perror("recv");
 		} else {
 
@@ -173,20 +176,23 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 				// RESPONSE is the only supported command at the moment:
 				if ( msg_header->command == RIP_HEADER_RESPONSE ) {
 
+					char source_address_p[16];
+					inet_ntop(AF_INET, &source_address.sin_addr, source_address_p, sizeof(source_address_p));
+
 					// Progressively scan through our buffer at interfaves of RIP_MESSAGE_SIZE
 					int len_remaining = len - sizeof(rip_msg_header_t);
 					int i = 0;
 #if XRIPD_DEBUG == 1
-					fprintf(stderr, "Received RIPv2 RESPONSE Message (Command: %02X) Total Message Size: %d Entry(ies) Size: %d\n", msg_header->command, len, len_remaining);
+					fprintf(stderr, "Received RIPv2 RESPONSE Message (Command: %02X) from %s Total Message Size: %d Entry(ies) Size: %d\n", msg_header->command, source_address_p, len, len_remaining);
 #endif
 					while (i <= (len_remaining - RIP_ENTRY_SIZE)) {
 						rip_msg_entry_t *rip_entry = (rip_msg_entry_t *)(receive_buffer + sizeof(rip_msg_header_t) + i);
 #if XRIPD_DEBUG == 1
 						char ipaddr[16];
-						inet_ntop(AF_INET, &rip_entry->ipaddr, ipaddr, sizeof(ipaddr));
 						char subnet[16];
-						inet_ntop(AF_INET, &rip_entry->subnet, subnet, sizeof(subnet));
 						char nexthop[16];
+						inet_ntop(AF_INET, &rip_entry->ipaddr, ipaddr, sizeof(ipaddr));
+						inet_ntop(AF_INET, &rip_entry->subnet, subnet, sizeof(subnet));
 						inet_ntop(AF_INET, &rip_entry->nexthop, nexthop, sizeof(nexthop));
 
 						fprintf(stderr, "\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
