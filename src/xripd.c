@@ -25,6 +25,7 @@ typedef struct xripd_settings_t {
 	int sd; 			// Socket Descriptor
 	char iface_name[IFNAMSIZ]; 	// Human String for an interface, ie. "eth3" or "enp0s3"
 	int iface_index; 		// Kernel index id for interface
+	int p_rib_in[2];		// Pipe for Listener -> RIB
 } xripd_settings_t;
 
 // https://tools.ietf.org/html/rfc2453
@@ -240,12 +241,39 @@ int main(void) {
 		return 1;
 	}
 
-	// Our listening socket for inbound RIPv2 packets:
-	if ( init_socket(xripd_settings) != 0)
+	// Create pipe and fork:
+	if (pipe(xripd_settings->p_rib_in) == -1) {
+		fprintf(stderr, "Unable to create rib_in pipe\n");
 		return 1;
+	}
+	pid_t f = fork();
 
-	// Main Listening Loop
-	xripd_listen_loop(xripd_settings);
+	// Parent (xripd listener):
+	if (f > 0) {
 
-	return 0;
+		// Close reading end of rib_in pipe:
+		close(xripd_settings->p_rib_in[0]);
+		
+		// Our listening socket for inbound RIPv2 packets:
+		if ( init_socket(xripd_settings) != 0)
+			return 1;
+
+		// Main Listening Loop
+		xripd_listen_loop(xripd_settings);
+
+		return 0;
+
+	// Child:
+	} else if (f == 0) {
+#if XRIPD_DEBUG == 1
+		fprintf(stderr, "RIB Process Started\n");
+#endif
+		// Close writing end of rib_in pipe:
+		close(xripd_settings->p_rib_in[1]);
+		sleep(100);
+		return 0;
+	// Failed to fork():
+	} else if (f < 0) {
+		return 1;
+	}
 }
