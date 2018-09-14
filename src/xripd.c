@@ -158,6 +158,11 @@ xripd_settings_t *init_xripd_settings() {
 	return xripd_settings;
 }
 
+int rib_add_entry(rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
+
+	return 0;
+}
+
 int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 
 	int len = 0;
@@ -204,6 +209,12 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 
 						fprintf(stderr, "\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
 #endif
+
+						if (rib_add_entry(rip_entry, source_address) != 0) {
+#if XRIPD_DEBUG == 1
+							fprintf(stderr, "Unable to add entry to RIP-RIB!\n");
+#endif
+						}
 						i += RIP_ENTRY_SIZE;
 					}
 				} else {
@@ -223,14 +234,17 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 
 int main(void) {
 
+	// Init our settings:
 	xripd_settings_t *xripd_settings = init_xripd_settings();
 	if ( xripd_settings == NULL ) {
 		return 1;
 	}
 
+	// Our listening socket for inbound RIPv2 packets:
 	if ( init_socket(xripd_settings) != 0)
 		return 1;
 
+	// Main Listening Loop
 	xripd_listen_loop(xripd_settings);
 
 	return 0;
