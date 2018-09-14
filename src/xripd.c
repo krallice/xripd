@@ -1,58 +1,8 @@
 #include "xripd.h"
+#include "xripd-rib.h"
 
-// xripd Defines:
-#define XRIPD_PASSIVE_IFACE "enp0s8"
-#define XRIPD_DEBUG 0x01
-
-// RIP Protocol Defines:
-#define RIP_MCAST_IP 224.0.0.9
-#define RIP_UDP_PORT 520
-
-#define RIP_SUPPORTED_VERSION 2
-
-#define RIP_DATAGRAM_SIZE 512
-#define RIP_ENTRY_SIZE 20
-
-// RIP Header Defines:
-#define RIP_HEADER_REQUEST 1
-#define RIP_HEADER_RESPONSE 2
-
-// RIP Entry Defines:
-#define RIP_AFI_INET 2
-
-// Daemon Settings Structure:
-typedef struct xripd_settings_t {
-	int sd; 			// Socket Descriptor
-	char iface_name[IFNAMSIZ]; 	// Human String for an interface, ie. "eth3" or "enp0s3"
-	int iface_index; 		// Kernel index id for interface
-	int p_rib_in[2];		// Pipe for Listener -> RIB
-} xripd_settings_t;
-
-// https://tools.ietf.org/html/rfc2453
-// RIP Message Format:
-// RIP Header:
-typedef struct rip_msg_header_t {
-	uint8_t command;
-	uint8_t version;
-	uint16_t zero;
-} rip_msg_header_t;
-
-// Each RIP Message may include 1-25 RIP Entries (RTEs):
-typedef struct rip_msg_entry_t {
-	uint16_t afi;
-	uint16_t tag;
-	uint32_t ipaddr;
-	uint32_t subnet;
-	uint32_t nexthop;
-	uint32_t metric;
-} rip_msg_entry_t;
-
-// Structure to pass into the rib:
-typedef struct rip_rib_entry_t {
-	struct sockaddr_in recv_from;
-	rip_msg_entry_t rip_entry;
-} rip_rib_entry_t;
-
+// Given an interface name string, find our interface index #, and
+// populate our xripd_settings_t struct with this index value:
 int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 
 	// Attempt to find interface index number of xripd_settings->iface_name
@@ -66,6 +16,8 @@ int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 	}
 }
 
+// Create our AF_INET SOCK_DGRAM listening socket:
+// (aka listen for UDP 520 inbound to the mcast rip ip):
 int init_socket(xripd_settings_t *xripd_settings) {
 
 	// Interface request:
@@ -164,6 +116,7 @@ int rib_add_entry(rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
 	return 0;
 }
 
+// Listen on our DGRAM socket, and parse messages recieved:
 int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 
 	int len = 0;
@@ -263,7 +216,7 @@ int main(void) {
 
 		return 0;
 
-	// Child:
+	// Child (xripd rib):
 	} else if (f == 0) {
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "RIB Process Started\n");
@@ -272,8 +225,10 @@ int main(void) {
 		close(xripd_settings->p_rib_in[1]);
 		sleep(100);
 		return 0;
+
 	// Failed to fork():
 	} else if (f < 0) {
+		fprintf(stderr, "Failed to Fork RIB Process\n");
 		return 1;
 	}
 }
