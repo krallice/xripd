@@ -39,7 +39,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		inet_ntop(AF_INET, &in_entry.rip_entry.nexthop, nexthop, sizeof(nexthop));
 		fprintf(stderr, "[rib]: Route Received: IP: %s %s Next-Hop: %s Metric: %02d\n", ipaddr, subnet, nexthop, ntohl(in_entry.rip_entry.metric));
 #endif
-		//(*xripd_settings->xripd_rib->add_to_rib)();
+		(*xripd_settings->xripd_rib->add_to_rib)(&in_entry);
 		//sleep(1);
 	}
 
