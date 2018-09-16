@@ -33,14 +33,14 @@ int init_socket(xripd_settings_t *xripd_settings) {
 	xripd_settings->sd = socket(AF_INET, SOCK_DGRAM, 0);
 	if ( xripd_settings->sd <= 0 ) {
 		close(xripd_settings->sd);
-		fprintf(stderr, "Error: Unable to open Datagram AF_INET socket.\n");
+		fprintf(stderr, "[daemon]: Error, Unable to open Datagram AF_INET socket.\n");
 		return 1;
 	}
 
 	// Xlate iface name to ifindex:
 	if ( get_iface_index(xripd_settings, &ifrq) != 0 ) {
 		close(xripd_settings->sd);
-		fprintf(stderr, "Error: Unable to identify interface by given string %s\n", xripd_settings->iface_name);
+		fprintf(stderr, "[daemon]: Error, Unable to identify interface by given string %s\n", xripd_settings->iface_name);
 		return 1;
 	}
 
@@ -48,14 +48,14 @@ int init_socket(xripd_settings_t *xripd_settings) {
 	int reuse = 1;
 	if ( setsockopt(xripd_settings->sd, SOL_SOCKET, SO_REUSEADDR, (char *) &reuse, sizeof(reuse)) == -1 ){
 		close(xripd_settings->sd);
-		fprintf(stderr, "Error: Unable to set SO_REUSEADDR on socket\n");
+		fprintf(stderr, "[daemon]: Error, Unable to set SO_REUSEADDR on socket\n");
 		return 1;
 	}
 
 	// Acquire IP Address:
 	if ( ioctl(xripd_settings->sd, SIOCGIFADDR, &ifrq)  == -1 ){
 		close(xripd_settings->sd);
-		fprintf(stderr, "Error: Unable to get IP Address of %s\n", xripd_settings->iface_name);
+		fprintf(stderr, "[daemon]: Error, Unable to get IP Address of %s\n", xripd_settings->iface_name);
 		return 1;
 	}
 
@@ -69,11 +69,11 @@ int init_socket(xripd_settings_t *xripd_settings) {
 
 	if ( bind(xripd_settings->sd, (const struct sockaddr *)(&bind_address), sizeof(bind_address)) == -1 ){
 		close(xripd_settings->sd);
-		fprintf(stderr, "Error: Unable to bind the RIPv2 MCAST IP + UDP Port to socket\n");
+		fprintf(stderr, "[daemon]: Error, Unable to bind the RIPv2 MCAST IP + UDP Port to socket\n");
 		return 1;
 	}
 
-	printf("Bound IP: %s\n", inet_ntoa(bind_address.sin_addr));
+	printf("[daemon]: Successfully Bound to IP: %s\n", inet_ntoa(bind_address.sin_addr));
 
 	// Populate our mcast group ips:
 	mcast_group.imr_multiaddr.s_addr = inet_addr("224.0.0.9");
@@ -84,11 +84,11 @@ int init_socket(xripd_settings_t *xripd_settings) {
 	if ( ret == -1 ) {
 		perror("setsockopt");
 		close(xripd_settings->sd);
-		fprintf(stderr, "Error: Unable to set socket option IP_ADD_MEMBERSHIP on socket\n");
+		fprintf(stderr, "[daemon]: Error, Unable to set socket option IP_ADD_MEMBERSHIP on socket\n");
 		return 1;
 	}
 
-	printf("Added Membership to MCAST IP: %s\n", inet_ntoa(mcast_group.imr_multiaddr));
+	printf("[daemon]: Successfully Added Membership to MCAST IP: %s\n", inet_ntoa(mcast_group.imr_multiaddr));
 
 	return 0;
 }
@@ -104,15 +104,25 @@ xripd_settings_t *init_xripd_settings() {
 	if ( strlen(XRIPD_PASSIVE_IFACE) <= IFNAMSIZ ) {
 		strcpy(xripd_settings->iface_name, XRIPD_PASSIVE_IFACE);
 	} else {
-		fprintf(stderr, "Error: Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
+		fprintf(stderr, "[daemon] Error, Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
 		return NULL;
 	}	
 
 	return xripd_settings;
 }
 
-int send_to_rib(rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
+int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
 
+	rip_rib_entry_t entry;
+	memcpy(&(entry.recv_from), &recv_from, sizeof(struct sockaddr_in));
+	memcpy(&(entry.rip_entry), rip_entry, sizeof(rip_msg_entry_t));
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[daemon]:\t\tSending RIP Entry to RIB\n");
+#endif
+	write(xripd_settings->p_rib_in[1], &entry, sizeof(rip_rib_entry_t));
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[daemon]:\t\tSent RIP Entry\n");
+#endif
 	return 0;
 }
 
@@ -128,7 +138,7 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 
 	while(1) {
 #if XRIPD_DEBUG == 1
-		fprintf(stderr, "Starting Listen Loop\n");
+		fprintf(stderr, "[daemon]: Listening ...\n");
 		fflush(stderr);
 #endif
 		if ((len = recvfrom(xripd_settings->sd, receive_buffer, RIP_DATAGRAM_SIZE, 0, (struct sockaddr *)&source_address, &source_address_len)) == -1) {
@@ -149,7 +159,7 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 					int len_remaining = len - sizeof(rip_msg_header_t);
 					int i = 0;
 #if XRIPD_DEBUG == 1
-					fprintf(stderr, "Received RIPv2 RESPONSE Message (Command: %02X) from %s Total Message Size: %d Entry(ies) Size: %d\n", msg_header->command, source_address_p, len, len_remaining);
+					fprintf(stderr, "[daemon]: Received RIPv2 RESPONSE Message (Command: %02X) from %s Total Message Size: %d Entry(ies) Size: %d\n", msg_header->command, source_address_p, len, len_remaining);
 #endif
 					while (i <= (len_remaining - RIP_ENTRY_SIZE)) {
 						rip_msg_entry_t *rip_entry = (rip_msg_entry_t *)(receive_buffer + sizeof(rip_msg_header_t) + i);
@@ -161,24 +171,24 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 						inet_ntop(AF_INET, &rip_entry->subnet, subnet, sizeof(subnet));
 						inet_ntop(AF_INET, &rip_entry->nexthop, nexthop, sizeof(nexthop));
 
-						fprintf(stderr, "\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
+						fprintf(stderr, "[daemon]:\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
 #endif
 
-						if (send_to_rib(rip_entry, source_address) != 0) {
+						if (send_to_rib(xripd_settings, rip_entry, source_address) != 0) {
 #if XRIPD_DEBUG == 1
-							fprintf(stderr, "Unable to add entry to RIP-RIB!\n");
+							fprintf(stderr, "[daemon]: Unable to add entry to RIP-RIB!\n");
 #endif
 						}
 						i += RIP_ENTRY_SIZE;
 					}
 				} else {
 #if XRIPD_DEBUG == 1
-				fprintf(stderr, "Received unsupported RIP Command: %02X from %s\n", msg_header->command, source_address_p);
+				fprintf(stderr, "[daemon]: Received unsupported RIP Command: %02X from %s\n", msg_header->command, source_address_p);
 #endif
 				}
 			} else {
 #if XRIPD_DEBUG == 1
-				fprintf(stderr, "Received unsupported RIP Version: %02X Message from %s\n", msg_header->version, source_address_p);
+				fprintf(stderr, "[daemon]: Received unsupported RIP Version: %02X Message from %s\n", msg_header->version, source_address_p);
 #endif
 			}
 		}
@@ -196,7 +206,7 @@ int main(void) {
 
 	// Create pipe and fork:
 	if (pipe(xripd_settings->p_rib_in) == -1) {
-		fprintf(stderr, "Unable to create rib_in pipe\n");
+		fprintf(stderr, "[daemon]: Unable to create rib_in pipe\n");
 		return 1;
 	}
 
@@ -224,7 +234,7 @@ int main(void) {
 	// Child (xripd rib):
 	} else if (f == 0) {
 #if XRIPD_DEBUG == 1
-		fprintf(stderr, "RIB Process Started\n");
+		fprintf(stderr, "[rib]: RIB Process Started\n");
 #endif
 		// Close writing end of rib_in pipe:
 		close(xripd_settings->p_rib_in[1]);
@@ -235,7 +245,7 @@ int main(void) {
 
 	// Failed to fork():
 	} else if (f < 0) {
-		fprintf(stderr, "Failed to Fork RIB Process\n");
+		fprintf(stderr, "[daemon]: Failed to Fork RIB Process\n");
 		return 1;
 	}
 }
