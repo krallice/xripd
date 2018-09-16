@@ -2,8 +2,8 @@
 #define XRIPD_RIB_H
 
 #include "xripd.h"
-#include "xripd-rib-null.h"
 #include "xripd-rib-ll.h"
+#include "xripd-rib-null.h"
 
 // Standard Includes:
 #include <stdio.h>
@@ -25,9 +25,11 @@
 #define XRIPD_RIB_DATASTORE_NULL 0x00
 #define XRIPD_RIB_DATASTORE_LINKEDLIST 0x01
 
+typedef struct xripd_settings_t xripd_settings_t;
+
 typedef struct xripd_rib_t {
 	uint8_t rib_datastore;
-	int (* add_to_rib)();
+	int (*add_to_rib)();
 } xripd_rib_t;
 
 // Structure to pass into the rib:
@@ -36,7 +38,7 @@ typedef struct xripd_rib_t {
 	//rip_msg_entry_t rip_entry;
 //} rip_rib_entry_t;
 
-//int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore);
-int init_rib(uint8_t rib_datastore);
+int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore);
+void rib_main_loop(xripd_settings_t *xripd_settings);
 
 #endif

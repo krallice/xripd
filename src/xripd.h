@@ -3,6 +3,7 @@
 
 #include "xripd-rib.h"
 #include "xripd-rib-ll.h"
+#include "xripd-rib-null.h"
 
 // Standard Includes:
 #include <stdio.h>

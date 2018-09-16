@@ -223,10 +223,12 @@ int main(void) {
 		// Close writing end of rib_in pipe:
 		close(xripd_settings->p_rib_in[1]);
 
-		if ( init_rib(XRIPD_RIB_DATASTORE_NULL) != 0)
+		// Init our RIB with a specific datastore:
+		if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_NULL) != 0)
 			return 1;
 
-		sleep(100);
+		rib_main_loop(xripd_settings);
+
 		return 0;
 
 	// Failed to fork():
