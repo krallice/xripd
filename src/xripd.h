@@ -1,6 +1,9 @@
 #ifndef XRIPD_H
 #define XRIPD_H
 
+#include "xripd-rib.h"
+#include "xripd-rib-ll.h"
+
 // Standard Includes:
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +46,7 @@ typedef struct xripd_settings_t {
 	int sd; 			// Socket Descriptor
 	char iface_name[IFNAMSIZ]; 	// Human String for an interface, ie. "eth3" or "enp0s3"
 	int iface_index; 		// Kernel index id for interface
+	struct xripd_rib_t *xripd_rib;		// Pointer to RIB
 	int p_rib_in[2];		// Pipe for Listener -> RIB
 } xripd_settings_t;
 

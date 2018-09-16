@@ -223,6 +223,10 @@ int main(void) {
 #endif
 		// Close writing end of rib_in pipe:
 		close(xripd_settings->p_rib_in[1]);
+
+		if ( init_rib(XRIPD_RIB_DATASTORE_LINKEDLIST) != 0)
+			return 1;
+
 		sleep(100);
 		return 0;
 
