@@ -1,6 +1,4 @@
-#include "xripd.h"
 #include "xripd-rib.h"
-#include "xripd-rib-ll.h"
 
 int init_rib(uint8_t rib_datastore) {
 
