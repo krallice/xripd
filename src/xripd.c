@@ -1,4 +1,5 @@
-#include"xripd.h"
+#include "xripd.h"
+#include "xripd-rib.h"
 
 // Given an interface name string, find our interface index #, and
 // populate our xripd_settings_t struct with this index value:
@@ -110,7 +111,7 @@ xripd_settings_t *init_xripd_settings() {
 	return xripd_settings;
 }
 
-int rib_add_entry(rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
+int send_to_rib(rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
 
 	return 0;
 }
@@ -163,7 +164,7 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 						fprintf(stderr, "\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
 #endif
 
-						if (rib_add_entry(rip_entry, source_address) != 0) {
+						if (send_to_rib(rip_entry, source_address) != 0) {
 #if XRIPD_DEBUG == 1
 							fprintf(stderr, "Unable to add entry to RIP-RIB!\n");
 #endif
@@ -198,6 +199,11 @@ int main(void) {
 		fprintf(stderr, "Unable to create rib_in pipe\n");
 		return 1;
 	}
+
+	// Init our RIB with a specific datastore:
+	if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_NULL) != 0)
+		return 1;
+
 	pid_t f = fork();
 
 	// Parent (xripd listener):
@@ -222,10 +228,6 @@ int main(void) {
 #endif
 		// Close writing end of rib_in pipe:
 		close(xripd_settings->p_rib_in[1]);
-
-		// Init our RIB with a specific datastore:
-		if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_NULL) != 0)
-			return 1;
 
 		rib_main_loop(xripd_settings);
 
