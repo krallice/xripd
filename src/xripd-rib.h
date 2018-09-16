@@ -2,6 +2,7 @@
 #define XRIPD_RIB_H
 
 #include "xripd.h"
+#include "xripd-rib-null.h"
 #include "xripd-rib-ll.h"
 
 // Standard Includes:
@@ -21,7 +22,8 @@
 #include <linux/if_arp.h>
 #include <arpa/inet.h>
 
-#define XRIPD_RIB_DATASTORE_LINKEDLIST 0x00
+#define XRIPD_RIB_DATASTORE_NULL 0x00
+#define XRIPD_RIB_DATASTORE_LINKEDLIST 0x01
 
 typedef struct xripd_rib_t {
 	uint8_t rib_datastore;

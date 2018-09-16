@@ -1,4 +1,4 @@
-#include "xripd.h"
+#include"xripd.h"
 
 // Given an interface name string, find our interface index #, and
 // populate our xripd_settings_t struct with this index value:
@@ -223,7 +223,7 @@ int main(void) {
 		// Close writing end of rib_in pipe:
 		close(xripd_settings->p_rib_in[1]);
 
-		if ( init_rib(XRIPD_RIB_DATASTORE_LINKEDLIST) != 0)
+		if ( init_rib(XRIPD_RIB_DATASTORE_NULL) != 0)
 			return 1;
 
 		sleep(100);
