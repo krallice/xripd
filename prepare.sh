@@ -1,3 +1,5 @@
+#!/bin/bash
+
 ip addr add 192.168.1.3/24 dev enp0s8
 ip link set dev enp0s8 up
 
