@@ -20,7 +20,7 @@
 #include <arpa/inet.h>
 
 // XRIPD Defines:
-#define XRIPD_PASSIVE_IFACE "eth0"
+#define XRIPD_PASSIVE_IFACE "enp0s8"
 #define XRIPD_DEBUG 0x01
 
 // RIP Protocol Defines:
