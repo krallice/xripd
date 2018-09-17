@@ -223,9 +223,10 @@ int main(void) {
 		close(xripd_settings->p_rib_in[0]);
 		
 		// Our listening socket for inbound RIPv2 packets:
-		if ( init_socket(xripd_settings) != 0)
+		if ( init_socket(xripd_settings) != 0) {
 			kill(f, SIGKILL);
 			return 1;
+		}
 
 		// Main Listening Loop
 		xripd_listen_loop(xripd_settings);
