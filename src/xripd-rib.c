@@ -32,10 +32,10 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[rib]: RIB Main Loop Started\n");
 #endif
-	rip_rib_entry_t in_entry;
+	rib_entry_t in_entry;
 	while (1) {
 
-		read(xripd_settings->p_rib_in[0], &in_entry, sizeof(rip_rib_entry_t));
+		read(xripd_settings->p_rib_in[0], &in_entry, sizeof(rib_entry_t));
 #if XRIPD_DEBUG == 1
 		char ipaddr[16];
 		char subnet[16];

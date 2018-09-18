@@ -21,7 +21,7 @@
 #include <linux/if_arp.h>
 #include <arpa/inet.h>
 
-int rib_null_add_to_rib(rip_rib_entry_t *in_entry);
+int rib_null_add_to_rib(rib_entry_t *in_entry);
 int rib_null_dump_rib();
 
 #endif

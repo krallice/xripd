@@ -24,14 +24,14 @@
 #define XRIPD_RIB_DATASTORE_LINKEDLIST 0x01
 
 // Structure to pass into the rib:
-typedef struct rip_rib_entry_t {
+typedef struct rib_entry_t {
 	struct sockaddr_in recv_from;
 	rip_msg_entry_t rip_entry;
-} rip_rib_entry_t;
+} rib_entry_t;
 
 typedef struct xripd_rib_t {
 	uint8_t rib_datastore;
-	int (*add_to_rib)(rip_rib_entry_t*);
+	int (*add_to_rib)(rib_entry_t*);
 	int (*dump_rib)();
 } xripd_rib_t;
 

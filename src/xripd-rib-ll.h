@@ -22,7 +22,7 @@
 #include <arpa/inet.h>
 
 int rib_ll_init();
-int rib_ll_add_to_rib(rip_rib_entry_t *in_entry);
+int rib_ll_add_to_rib(rib_entry_t *in_entry);
 int rib_ll_dump_rib();
 
 #endif

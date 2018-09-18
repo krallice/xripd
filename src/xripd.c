@@ -113,13 +113,13 @@ xripd_settings_t *init_xripd_settings() {
 
 int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
 
-	rip_rib_entry_t entry;
+	rib_entry_t entry;
 	memcpy(&(entry.recv_from), &recv_from, sizeof(struct sockaddr_in));
 	memcpy(&(entry.rip_entry), rip_entry, sizeof(rip_msg_entry_t));
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[daemon]:\t\tSending RIP Entry to RIB\n");
 #endif
-	write(xripd_settings->p_rib_in[1], &entry, sizeof(rip_rib_entry_t));
+	write(xripd_settings->p_rib_in[1], &entry, sizeof(rib_entry_t));
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[daemon]:\t\tSent RIP Entry\n");
 #endif

@@ -1,7 +1,7 @@
 #include "xripd-rib-ll.h"
 
 typedef struct rib_ll_node_t {
-	rip_rib_entry_t entry;
+	rib_entry_t entry;
 	struct rib_ll_node_t *next;
 } rib_ll_node_t;
 
@@ -15,14 +15,14 @@ int rib_ll_init() {
 	return 0;
 }
 
-int rib_ll_add_to_rib(rip_rib_entry_t *in_entry) {
+int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 
 	rib_ll_node_t *cur = head;
 	rib_ll_node_t *new;
 
 	if ( cur == NULL ) {
 		new = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
-		memcpy(&(new->entry), in_entry, sizeof(rip_rib_entry_t));
+		memcpy(&(new->entry), in_entry, sizeof(rib_entry_t));
 		cur->next = new;
 		return 0;
 	} else {
@@ -32,7 +32,7 @@ int rib_ll_add_to_rib(rip_rib_entry_t *in_entry) {
 		}
 
 		new = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
-		memcpy(&(new->entry), in_entry, sizeof(rip_rib_entry_t));
+		memcpy(&(new->entry), in_entry, sizeof(rib_entry_t));
 		cur->next = new;
 		return 0;
 	}
