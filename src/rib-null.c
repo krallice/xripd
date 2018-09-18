@@ -1,4 +1,4 @@
-#include "xripd-rib-null.h"
+#include "rib-null.h"
 
 int rib_null_add_to_rib(rib_entry_t *in_entry) {
 #if XRIPD_DEBUG == 1

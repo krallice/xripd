@@ -1,5 +1,5 @@
 #include "xripd.h"
-#include "xripd-rib.h"
+#include "rib.h"
 
 // Given an interface name string, find our interface index #, and
 // populate our xripd_settings_t struct with this index value:

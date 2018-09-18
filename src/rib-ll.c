@@ -1,4 +1,4 @@
-#include "xripd-rib-ll.h"
+#include "rib-ll.h"
 
 typedef struct rib_ll_node_t {
 	rib_entry_t entry;
