@@ -6,3 +6,10 @@ int rib_null_add_to_rib(rip_rib_entry_t *in_entry) {
 #endif
 	return 0;
 }
+
+int rib_null_dump_rib() {
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[null]: Dumping RIB, Empty no surprise ...\n");
+#endif
+	return 0;
+}

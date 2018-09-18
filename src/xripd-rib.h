@@ -32,6 +32,7 @@ typedef struct rip_rib_entry_t {
 typedef struct xripd_rib_t {
 	uint8_t rib_datastore;
 	int (*add_to_rib)(rip_rib_entry_t*);
+	int (*dump_rib)();
 } xripd_rib_t;
 
 int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore);

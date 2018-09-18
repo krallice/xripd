@@ -12,8 +12,14 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 
 	if ( rib_datastore == XRIPD_RIB_DATASTORE_NULL ) {
 		xripd_rib->add_to_rib = &rib_null_add_to_rib;
-
+		xripd_rib->dump_rib = &rib_null_dump_rib;
 		xripd_settings->xripd_rib = xripd_rib;
+		return 0;
+	} else if ( rib_datastore == XRIPD_RIB_DATASTORE_LINKEDLIST ) {
+		xripd_rib->add_to_rib = &rib_ll_add_to_rib;
+		xripd_rib->dump_rib = &rib_ll_dump_rib;
+		xripd_settings->xripd_rib = xripd_rib;
+		rib_ll_init();
 		return 0;
 	}
 
@@ -37,9 +43,10 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		inet_ntop(AF_INET, &in_entry.rip_entry.ipaddr, ipaddr, sizeof(ipaddr));
 		inet_ntop(AF_INET, &in_entry.rip_entry.subnet, subnet, sizeof(subnet));
 		inet_ntop(AF_INET, &in_entry.rip_entry.nexthop, nexthop, sizeof(nexthop));
-		fprintf(stderr, "[rib]: Route Received: IP: %s %s Next-Hop: %s Metric: %02d\n", ipaddr, subnet, nexthop, ntohl(in_entry.rip_entry.metric));
+		fprintf(stderr, "[rib]: Route Received: IP: %s %s Next-Hop: %s Metric: %02d, Adding to RIB\n", ipaddr, subnet, nexthop, ntohl(in_entry.rip_entry.metric));
 #endif
 		(*xripd_settings->xripd_rib->add_to_rib)(&in_entry);
+		(*xripd_settings->xripd_rib->dump_rib)();
 		//sleep(1);
 	}
 

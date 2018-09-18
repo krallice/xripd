@@ -211,7 +211,7 @@ int main(void) {
 	}
 
 	// Init our RIB with a specific datastore:
-	if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_NULL) != 0)
+	if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_LINKEDLIST) != 0)
 		return 1;
 
 	pid_t f = fork();
