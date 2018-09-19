@@ -196,7 +196,7 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 	return 0;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
 
 	// Init our settings:
 	xripd_settings_t *xripd_settings = init_xripd_settings();
@@ -219,6 +219,9 @@ int main(void) {
 	// Parent (xripd listener):
 	if (f > 0) {
 
+		char proc_name[] = "xripd-daemon";
+		strncpy(argv[0], proc_name, sizeof(proc_name));
+
 		// Close reading end of rib_in pipe:
 		close(xripd_settings->p_rib_in[0]);
 		
@@ -239,6 +242,10 @@ int main(void) {
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "[rib]: RIB Process Started\n");
 #endif
+
+		char proc_name[] = "xripd-rib";
+		strncpy(argv[0], proc_name, sizeof(proc_name));
+
 		// Close writing end of rib_in pipe:
 		close(xripd_settings->p_rib_in[1]);
 
