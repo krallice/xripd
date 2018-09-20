@@ -1,8 +1,8 @@
 #include "xripd.h"
 #include "rib.h"
 
-// Given an interface name string, find our interface index #, and
-// populate our xripd_settings_t struct with this index value:
+// Given an interface name string, find and set our interface number (as indexed by the kernel).
+// Populate our xripd_settings_t struct with this index value
 int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 
 	// Attempt to find interface index number of xripd_settings->iface_name
@@ -17,16 +17,16 @@ int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 }
 
 // Create our AF_INET SOCK_DGRAM listening socket:
-// (aka listen for UDP 520 inbound to the mcast rip ip):
 int init_socket(xripd_settings_t *xripd_settings) {
 
-	// Interface request:
+	// Interface Request:
 	struct ifreq ifrq;
 
 	// Socket address vars:
 	uint16_t bind_port = RIP_UDP_PORT;
 	struct sockaddr_in bind_address;
 
+	// Multicast Membership Request:
 	struct ip_mreq mcast_group;
 
 	// Initiate Socket:
@@ -61,9 +61,7 @@ int init_socket(xripd_settings_t *xripd_settings) {
 
 	// Convert the presentation string for RIP_MCAST_IP into a network object:
 	// Format our bind address struct:
-
-	// bind_address.sin_addr.s_addr = ((struct sockaddr_in *)&ifrq.ifr_addr)->sin_addr.s_addr;
-	bind_address.sin_addr.s_addr = inet_addr("224.0.0.9");
+	bind_address.sin_addr.s_addr = inet_addr(RIP_MCAST_IP);
 	bind_address.sin_family = AF_INET;
 	bind_address.sin_port = htons(bind_port);
 
@@ -76,7 +74,7 @@ int init_socket(xripd_settings_t *xripd_settings) {
 	printf("[daemon]: Successfully Bound to IP: %s\n", inet_ntoa(bind_address.sin_addr));
 
 	// Populate our mcast group ips:
-	mcast_group.imr_multiaddr.s_addr = inet_addr("224.0.0.9");
+	mcast_group.imr_multiaddr.s_addr = inet_addr(RIP_MCAST_IP);
 	mcast_group.imr_interface.s_addr = ((struct sockaddr_in *)&ifrq.ifr_addr)->sin_addr.s_addr;
 
 	// Add mcast membership for our RIPv2 MCAST group:
@@ -111,14 +109,18 @@ xripd_settings_t *init_xripd_settings() {
 	return xripd_settings;
 }
 
+// Encapsulate the raw rip_msg_entry_t from the datagram into a
+// rib_entry_t, and send to the rib process via the p_rib_in anon pipe:
 int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
 
+	// Create our rib_entry:
 	rib_entry_t entry;
 	memcpy(&(entry.recv_from), &recv_from, sizeof(struct sockaddr_in));
 	memcpy(&(entry.rip_msg_entry), rip_entry, sizeof(rip_msg_entry_t));
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[daemon]:\t\tSending RIP Entry to RIB\n");
 #endif
+	// Send through our anon pipe to the rib process:
 	write(xripd_settings->p_rib_in[1], &entry, sizeof(rib_entry_t));
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[daemon]:\t\tSent RIP Entry\n");
@@ -204,7 +206,8 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	// Create pipe and fork:
+	// Create pipe, used for sending rip message entries from the
+	// listening daemon to the rib process:
 	if (pipe(xripd_settings->p_rib_in) == -1) {
 		fprintf(stderr, "[daemon]: Unable to create rib_in pipe\n");
 		return 1;

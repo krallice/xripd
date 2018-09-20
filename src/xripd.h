@@ -20,11 +20,11 @@
 #include <arpa/inet.h>
 
 // XRIPD Defines:
-#define XRIPD_PASSIVE_IFACE "enp0s8"
+#define XRIPD_PASSIVE_IFACE "eth0"
 #define XRIPD_DEBUG 0x01
 
 // RIP Protocol Defines:
-#define RIP_MCAST_IP 224.0.0.9
+#define RIP_MCAST_IP "224.0.0.9"
 #define RIP_UDP_PORT 520
 
 #define RIP_SUPPORTED_VERSION 2
