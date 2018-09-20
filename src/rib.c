@@ -40,10 +40,10 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		char ipaddr[16];
 		char subnet[16];
 		char nexthop[16];
-		inet_ntop(AF_INET, &in_entry.rip_entry.ipaddr, ipaddr, sizeof(ipaddr));
-		inet_ntop(AF_INET, &in_entry.rip_entry.subnet, subnet, sizeof(subnet));
-		inet_ntop(AF_INET, &in_entry.rip_entry.nexthop, nexthop, sizeof(nexthop));
-		fprintf(stderr, "[rib]: Route Received: IP: %s %s Next-Hop: %s Metric: %02d, Adding to RIB\n", ipaddr, subnet, nexthop, ntohl(in_entry.rip_entry.metric));
+		inet_ntop(AF_INET, &in_entry.rip_msg_entry.ipaddr, ipaddr, sizeof(ipaddr));
+		inet_ntop(AF_INET, &in_entry.rip_msg_entry.subnet, subnet, sizeof(subnet));
+		inet_ntop(AF_INET, &in_entry.rip_msg_entry.nexthop, nexthop, sizeof(nexthop));
+		fprintf(stderr, "[rib]: Route Received: IP: %s %s Next-Hop: %s Metric: %02d, Adding to RIB\n", ipaddr, subnet, nexthop, ntohl(in_entry.rip_msg_entry.metric));
 #endif
 		(*xripd_settings->xripd_rib->add_to_rib)(&in_entry);
 		(*xripd_settings->xripd_rib->dump_rib)();

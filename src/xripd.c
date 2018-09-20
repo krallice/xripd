@@ -115,7 +115,7 @@ int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, st
 
 	rib_entry_t entry;
 	memcpy(&(entry.recv_from), &recv_from, sizeof(struct sockaddr_in));
-	memcpy(&(entry.rip_entry), rip_entry, sizeof(rip_msg_entry_t));
+	memcpy(&(entry.rip_msg_entry), rip_entry, sizeof(rip_msg_entry_t));
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[daemon]:\t\tSending RIP Entry to RIB\n");
 #endif

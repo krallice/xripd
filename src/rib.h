@@ -26,7 +26,7 @@
 // Structure to pass into the rib:
 typedef struct rib_entry_t {
 	struct sockaddr_in recv_from;
-	rip_msg_entry_t rip_entry;
+	rip_msg_entry_t rip_msg_entry;
 } rib_entry_t;
 
 typedef struct xripd_rib_t {

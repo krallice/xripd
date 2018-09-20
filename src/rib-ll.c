@@ -46,13 +46,13 @@ int rib_ll_dump_rib() {
 	fprintf(stderr, "[l-list]: Start RIB Dump\n");
 
 	char ipaddr[16];
-	inet_ntop(AF_INET, &(cur->entry.rip_entry.ipaddr), ipaddr, sizeof(ipaddr));
-	fprintf(stderr, "[l-list]: Node: %p IP: %s Metric: %02d Next: %p\n", cur, ipaddr, ntohl(cur->entry.rip_entry.metric), cur->next);
+	inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+	fprintf(stderr, "[l-list]: Node: %p IP: %s Metric: %02d Next: %p\n", cur, ipaddr, ntohl(cur->entry.rip_msg_entry.metric), cur->next);
 	cur = cur->next;
 
 	while ( cur != NULL ) {
-		inet_ntop(AF_INET, &(cur->entry.rip_entry.ipaddr), ipaddr, sizeof(ipaddr));
-		fprintf(stderr, "[l-list]: Node: %p IP: %s Metric: %02d Next: %p\n", cur, ipaddr, ntohl(cur->entry.rip_entry.metric), cur->next);
+		inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+		fprintf(stderr, "[l-list]: Node: %p IP: %s Metric: %02d Next: %p\n", cur, ipaddr, ntohl(cur->entry.rip_msg_entry.metric), cur->next);
 		cur = cur->next;
 	}
 
