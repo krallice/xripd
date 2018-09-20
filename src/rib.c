@@ -2,6 +2,9 @@
 #include "rib-ll.h"
 #include "rib-null.h"
 
+// Init our xripd_rib_t structure.
+// xripd_rib_t is an abstraction of function pointers which at init time
+// are referenced to underlying implementations (called 'datastores'):
 int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 
 	// Init and Zeroise:
@@ -27,6 +30,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	return 1;
 }
 
+// Post-fork() entry:
 void rib_main_loop(xripd_settings_t *xripd_settings) {
 
 #if XRIPD_DEBUG == 1
@@ -35,6 +39,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	rib_entry_t in_entry;
 	while (1) {
 
+		// Read struct sent from listening daemon over anon pipe:
 		read(xripd_settings->p_rib_in[0], &in_entry, sizeof(rib_entry_t));
 #if XRIPD_DEBUG == 1
 		char ipaddr[16];

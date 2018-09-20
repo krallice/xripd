@@ -20,15 +20,21 @@
 #include <linux/if_arp.h>
 #include <arpa/inet.h>
 
+// Datastore implementation indexes
+// uint8_t value, 256 possible datastores:
 #define XRIPD_RIB_DATASTORE_NULL 0x00
 #define XRIPD_RIB_DATASTORE_LINKEDLIST 0x01
 
-// Structure to pass into the rib:
+// The Rib is comprised of a logical ordering of rib_entry_t's
+// The raw data from a rip msg is held in rip_msg_entry and
+// related useful information is also packed in:
 typedef struct rib_entry_t {
 	struct sockaddr_in recv_from;
 	rip_msg_entry_t rip_msg_entry;
 } rib_entry_t;
 
+// Abstraction, comprised of function pointers to underlying
+// implementations relating to a 'datastore':
 typedef struct xripd_rib_t {
 	uint8_t rib_datastore;
 	int (*add_to_rib)(rib_entry_t*);
