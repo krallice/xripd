@@ -24,12 +24,17 @@ int rib_ll_init() {
 	return 0;
 }
 
-int rib_ll_new_node(rib_ll_node_t *join, rib_entry_t *in_entry) {
+int rib_ll_new_node(rib_ll_node_t *new, rib_entry_t *in_entry, rib_ll_node_t *last) {
 
-	join = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
-	memcpy(&(head->entry), in_entry, sizeof(rib_entry_t));
-	join->next = NULL;
+	new = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
+	memset(new, 0, sizeof(rib_ll_node_t));
+	memcpy(&(new->entry), in_entry, sizeof(rib_entry_t));
+	new->next = NULL;
 
+	// If input is NOT head:
+	if ( last != NULL ) {
+		last->next = new;
+	}
 	return 0;
 }
 
@@ -141,9 +146,7 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 			fprintf(stderr, "[l-list]: New Route, Appending to linked list.\n");
 #endif
 			rib_ll_node_t *new = NULL;
-			new = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
-			memcpy(&(new->entry), in_entry, sizeof(rib_entry_t));
-			last->next = new;
+			rib_ll_new_node(new, in_entry, last);
 			return 0;
 		}
 
