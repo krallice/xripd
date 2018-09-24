@@ -9,6 +9,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 
 // Network Specific:
 #include <arpa/inet.h>
@@ -20,7 +21,7 @@
 #include <arpa/inet.h>
 
 // XRIPD Defines:
-#define XRIPD_PASSIVE_IFACE "eth0"
+#define XRIPD_PASSIVE_IFACE "enp0s3"
 #define XRIPD_DEBUG 0x01
 
 // RIP Protocol Defines:
@@ -38,6 +39,8 @@
 
 // RIP Entry Defines:
 #define RIP_AFI_INET 2
+
+#define RIP_METRIC_INFINITY 16
 
 // Daemon Settings Structure:
 typedef struct xripd_settings_t {

@@ -30,6 +30,7 @@
 // related useful information is also packed in:
 typedef struct rib_entry_t {
 	struct sockaddr_in recv_from;
+	time_t recv_time;
 	rip_msg_entry_t rip_msg_entry;
 } rib_entry_t;
 
