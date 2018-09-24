@@ -6,6 +6,7 @@
 #define LL_CMP_BETTER_METRIC 0x02
 #define LL_CMP_SAME_METRIC_SAME_NEIGH 0x03
 #define LL_CMP_SAME_METRIC_DIFF_NEIGH 0x04
+#define LL_CMP_INFINITY_MATCH 0x05
 
 typedef struct rib_ll_node_t {
 	rib_entry_t entry;
@@ -39,24 +40,34 @@ int rib_ll_node_compare(rib_entry_t *in_entry, rib_ll_node_t *cur) {
 		(in_entry->rip_msg_entry.subnet == cur->entry.rip_msg_entry.subnet) ) {
 
 		// Check for metric value:
+		if ( ntohl(in_entry->rip_msg_entry.metric) < RIP_METRIC_INFINITY ) {
 
-		// Worse (Higher) metric:
-		if ( ntohl(in_entry->rip_msg_entry.metric) > ntohl(cur->entry.rip_msg_entry.metric) ) {
-			return LL_CMP_WORSE_METRIC;
+			// Worse (Higher) metric:
+			if ( ntohl(in_entry->rip_msg_entry.metric) > ntohl(cur->entry.rip_msg_entry.metric) ) {
+				return LL_CMP_WORSE_METRIC;
 
-		// Equal metric:
-		} else if ( ntohl(in_entry->rip_msg_entry.metric) == ntohl(cur->entry.rip_msg_entry.metric) ) {
-			
-			// Advertised from the same neighbour:
-			if ( in_entry->recv_from.sin_addr.s_addr == cur->entry.recv_from.sin_addr.s_addr ) {					
-				return LL_CMP_SAME_METRIC_SAME_NEIGH;
+			// Equal metric:
+			} else if ( ntohl(in_entry->rip_msg_entry.metric) == ntohl(cur->entry.rip_msg_entry.metric) ) {
+				
+				// Advertised from the same neighbour:
+				if ( in_entry->recv_from.sin_addr.s_addr == cur->entry.recv_from.sin_addr.s_addr ) {					
+					return LL_CMP_SAME_METRIC_SAME_NEIGH;
+				} else {
+					return LL_CMP_SAME_METRIC_DIFF_NEIGH;
+				}
+
+			// Better (Lower) metric:
 			} else {
-				return LL_CMP_SAME_METRIC_DIFF_NEIGH;
+				return LL_CMP_BETTER_METRIC;
 			}
 
-		// Better (Lower) metric:
+		// Infinity:
 		} else {
-			return LL_CMP_BETTER_METRIC;
+			if ( in_entry->recv_from.sin_addr.s_addr == cur->entry.recv_from.sin_addr.s_addr ) {					
+				return LL_CMP_INFINITY_MATCH;
+			} else {
+				return LL_CMP_NO_MATCH;
+			}
 		}
 	} else {
 		return LL_CMP_NO_MATCH;
@@ -136,9 +147,44 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 			return 0;
 		}
 
+	// Infinity metric:
 	} else {
 #if XRIPD_DEBUG == 1
-		fprintf(stderr, "[l-list]: Infinity Metric Route Received. Handler function not yet implemented\n");
+		fprintf(stderr, "[l-list]: Infinity Metric Route Received.\n");
+#endif
+		while ( cur != NULL ) {
+
+			int ret = rib_ll_node_compare(in_entry, cur);
+
+			switch (ret) {
+				// No match, iterate on linked list:
+				case LL_CMP_NO_MATCH:
+					last = cur;
+					cur = cur->next;
+					break;
+				case LL_CMP_INFINITY_MATCH:
+					
+					// First node?:
+					if ( cur == head ) {
+#if XRIPD_DEBUG == 1
+						fprintf(stderr, "[l-list]: Infinity match for head node. Head to be removed.\n");
+#endif
+						head = cur->next;
+						free(cur);
+						return 0;
+					// Another node?:
+					} else {
+#if XRIPD_DEBUG == 1
+						fprintf(stderr, "[l-list]: Infinity match for node %p. Node to be removed.\n", cur);
+#endif
+						last->next = cur->next;
+						free(cur);
+						return 0;
+					}
+			}
+		}
+#if XRIPD_DEBUG == 1
+		fprintf(stderr, "[l-list]: No route match for Infinity Metric Entry. Ignored.\n");
 #endif
 		return 1;
 	}
