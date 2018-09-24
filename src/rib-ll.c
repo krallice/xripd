@@ -1,5 +1,12 @@
 #include "rib-ll.h"
 
+// Comparison return values:
+#define LL_CMP_NO_MATCH 0x00
+#define LL_CMP_WORSE_METRIC 0x01
+#define LL_CMP_BETTER_METRIC 0x02
+#define LL_CMP_SAME_METRIC_SAME_NEIGH 0x03
+#define LL_CMP_SAME_METRIC_DIFF_NEIGH 0x04
+
 typedef struct rib_ll_node_t {
 	rib_entry_t entry;
 	struct rib_ll_node_t *next;
@@ -23,6 +30,37 @@ int rib_ll_new_node(rib_ll_node_t *join, rib_entry_t *in_entry) {
 	join->next = NULL;
 
 	return 0;
+}
+
+int rib_ll_node_compare(rib_entry_t *in_entry, rib_ll_node_t *cur) {
+
+	// Check for IP/Subnet First:
+	if ( (in_entry->rip_msg_entry.ipaddr == cur->entry.rip_msg_entry.ipaddr) &&
+		(in_entry->rip_msg_entry.subnet == cur->entry.rip_msg_entry.subnet) ) {
+
+		// Check for metric value:
+
+		// Worse (Higher) metric:
+		if ( ntohl(in_entry->rip_msg_entry.metric) > ntohl(cur->entry.rip_msg_entry.metric) ) {
+			return LL_CMP_WORSE_METRIC;
+
+		// Equal metric:
+		} else if ( ntohl(in_entry->rip_msg_entry.metric) == ntohl(cur->entry.rip_msg_entry.metric) ) {
+			
+			// Advertised from the same neighbour:
+			if ( in_entry->recv_from.sin_addr.s_addr == cur->entry.recv_from.sin_addr.s_addr ) {					
+				return LL_CMP_SAME_METRIC_SAME_NEIGH;
+			} else {
+				return LL_CMP_SAME_METRIC_DIFF_NEIGH;
+			}
+
+		// Better (Lower) metric:
+		} else {
+			return LL_CMP_BETTER_METRIC;
+		}
+	} else {
+		return LL_CMP_NO_MATCH;
+	}
 }
 
 int rib_ll_add_to_rib(rib_entry_t *in_entry) {
@@ -49,48 +87,41 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 			// Loop through each entry of the linked list until the end:
 			while ( cur != NULL ) {
 
-				if ( (in_entry->rip_msg_entry.ipaddr == cur->entry.rip_msg_entry.ipaddr) &&
-				  	(in_entry->rip_msg_entry.subnet == cur->entry.rip_msg_entry.subnet) ) {
-#if XRIPD_DEBUG == 1
-					fprintf(stderr, "[l-list]: Node:%p IP/Subnet Match\n", cur);
-#endif
+				int ret = rib_ll_node_compare(in_entry, cur);
 
-					// Worse (Higher) metric:
-					if ( ntohl(in_entry->rip_msg_entry.metric) > ntohl(cur->entry.rip_msg_entry.metric) ) {
+				switch (ret) {
+					// No match, iterate on linked list:
+					case LL_CMP_NO_MATCH:
+						last = cur;
+						cur = cur->next;
+						break;
+
+					case LL_CMP_WORSE_METRIC:
 #if XRIPD_DEBUG == 1
 						fprintf(stderr, "[l-list]: Node:%p Worse Metric, NOT installing.\n", cur);
 #endif
 						return 0;
-					// Equal metric:
-					} else if ( ntohl(in_entry->rip_msg_entry.metric) == ntohl(cur->entry.rip_msg_entry.metric) ) {
-						
-						// Advertised from the same neighbour:
-						if ( in_entry->recv_from.sin_addr.s_addr == cur->entry.recv_from.sin_addr.s_addr ) {					
+
+					case LL_CMP_SAME_METRIC_DIFF_NEIGH:
 #if XRIPD_DEBUG == 1
-							fprintf(stderr, "[l-list]: Node:%p Same neighbour, same metric. Updating recv_time\n", cur);
+						fprintf(stderr, "[l-list]: Node:%p Different neighbour, same metric. NOT installing.\n", cur);
 #endif
-							cur->entry.recv_time = in_entry->recv_time;
-							return 0;
-						} else {
+						return 0;
+
+					case LL_CMP_SAME_METRIC_SAME_NEIGH:
 #if XRIPD_DEBUG == 1
-							fprintf(stderr, "[l-list]: Node:%p Different neighbour, same metric. NOT installing.\n", cur);
+						fprintf(stderr, "[l-list]: Node:%p Same neighbour, same metric. Updating recv_time\n", cur);
 #endif
-							return 0;
-						}
-					// Better (Lower) metric:
-					} else {
-						// Better metric, let's replace existing rib entry:
-						memcpy(&(cur->entry), in_entry, sizeof(rib_entry_t));
+						cur->entry.recv_time = in_entry->recv_time;
+						return 0;
+
+					case LL_CMP_BETTER_METRIC:
 #if XRIPD_DEBUG == 1
 						fprintf(stderr, "[l-list]: Node:%p Better route, INSTALLING.\n", cur);
 #endif
+						// Better metric, let's replace existing rib entry:
+						memcpy(&(cur->entry), in_entry, sizeof(rib_entry_t));
 						return 0;
-					}
-
-				// No match, next node please:
-				} else {
-					last = cur;
-					cur = cur->next;
 				}
 			}
 
@@ -104,6 +135,7 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 			last->next = new;
 			return 0;
 		}
+
 	} else {
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "[l-list]: Infinity Metric Route Received. Handler function not yet implemented\n");
