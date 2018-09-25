@@ -2,6 +2,9 @@
 #include "rib-ll.h"
 #include "rib-null.h"
 
+#define RIB_SELECT_TIMEOUT 1
+#define RIB_MAX_READ_IN 15
+
 // Init our xripd_rib_t structure.
 // xripd_rib_t is an abstraction of function pointers which at init time
 // are referenced to underlying implementations (called 'datastores'):
@@ -52,31 +55,56 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[rib]: RIB Main Loop Started\n");
 #endif
-	// Our RIB struct that gets populated by the pipe input:
+	// Our RIB struct that the daemon passes to us:
 	rib_entry_t in_entry;
 
 	fd_set readfds; // Set of file descriptors (in our case, only one) for select() to watch for
 	struct timeval timeout; // Time to wait for data in our select()ed socket
 	int sret; // select() return value
 
-	// Wipe our set of fds, and monitor our input pipe descriptor:
-	FD_ZERO(&readfds);
-	FD_SET(xripd_settings->p_rib_in[0], &readfds);
-
-	// Timeout value 1s:
-	timeout.tv_sec = 1;
-	timeout.tv_usec = 0;
+	// Amount of rip msg entries we can process before forcing execution to the timeout triggered path.
+	// This is to prevent a DoS due to a datagram flood:
+	int entry_count = 0;
 
 	while (1) {
 
-		// Read struct sent from listening daemon over anon pipe:
-		read(xripd_settings->p_rib_in[0], &in_entry, sizeof(rib_entry_t));
+		// Wipe our set of fds, and monitor our input pipe descriptor:
+		FD_ZERO(&readfds);
+		FD_SET(xripd_settings->p_rib_in[0], &readfds);
 
+		// Timeout value; (how often to poll)
+		timeout.tv_sec = RIB_SELECT_TIMEOUT;
+		timeout.tv_usec = 0;
+
+		sret = select(xripd_settings->p_rib_in[0] + 1, &readfds, NULL, NULL, &timeout);
+
+		// Error:
+		if (sret < 0) {
+			fprintf(stderr, "[rib]: Unable to select() on pipe.\n");
+			return;
+
+		// Pipe sd is ready to be read:
+		} else if (sret && (entry_count < RIB_MAX_READ_IN)) { 
+
+			// Read struct sent from listening daemon over anon pipe:
+			// This is a blocking function, not an issue as we have select()ed on the 
+			// fdset containing the socket beforehand:
+			read(xripd_settings->p_rib_in[0], &in_entry, sizeof(rib_entry_t));
+			++entry_count;
 #if XRIPD_DEBUG == 1
-		rib_route_print(&in_entry);
+			rib_route_print(&in_entry);
 #endif
-		(*xripd_settings->xripd_rib->add_to_rib)(&in_entry);
-		(*xripd_settings->xripd_rib->dump_rib)();
-	}
+			(*xripd_settings->xripd_rib->add_to_rib)(&in_entry);
 
+		// Timeout triggered:
+		} else {
+			if (entry_count < RIB_MAX_READ_IN ) {
+				++entry_count;
+			} else {
+				// Reset our entry_count variable:
+				(*xripd_settings->xripd_rib->dump_rib)();
+				entry_count = 0;
+			}
+		}
+	}
 }
