@@ -207,7 +207,7 @@ int rib_ll_dump_rib() {
 		inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
 		inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.subnet), subnet, sizeof(subnet));
 		inet_ntop(AF_INET, &(cur->entry.recv_from.sin_addr.s_addr), nexthop, sizeof(nexthop));
-		fprintf(stderr, "[l-list]: Node: %p IP: %s %s NH: %s Metric: %02d Timestamp: %lld Next: %p\n", 
+		fprintf(stderr, "[l-list]: RIB Dump: Node: %p IP: %s %s NH: %s Metric: %02d Timestamp: %lld Next: %p\n", 
 				cur, ipaddr, subnet, nexthop, ntohl(cur->entry.rip_msg_entry.metric), (long long)cur->entry.recv_time, cur->next);
 		cur = cur->next;
 	}
