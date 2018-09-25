@@ -20,6 +20,9 @@
 #include <linux/if_arp.h>
 #include <arpa/inet.h>
 
+// Select():
+#include <sys/select.h>
+
 // Datastore implementation indexes
 // uint8_t value, 256 possible datastores:
 #define XRIPD_RIB_DATASTORE_NULL 0x00
