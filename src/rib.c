@@ -19,11 +19,13 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	if ( rib_datastore == XRIPD_RIB_DATASTORE_NULL ) {
 		xripd_rib->add_to_rib = &rib_null_add_to_rib;
 		xripd_rib->dump_rib = &rib_null_dump_rib;
+		xripd_rib->remove_expired_entries = &rib_null_remove_expired_entries;
 		xripd_settings->xripd_rib = xripd_rib;
 		return 0;
 	} else if ( rib_datastore == XRIPD_RIB_DATASTORE_LINKEDLIST ) {
 		xripd_rib->add_to_rib = &rib_ll_add_to_rib;
 		xripd_rib->dump_rib = &rib_ll_dump_rib;
+		xripd_rib->remove_expired_entries = &rib_ll_remove_expired_entries;
 		xripd_settings->xripd_rib = xripd_rib;
 		rib_ll_init();
 		return 0;
@@ -99,6 +101,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		// Timeout triggered:
 		} else {
 			if (entry_count < RIB_MAX_READ_IN ) {
+				(*xripd_settings->xripd_rib->remove_expired_entries)();
 				++entry_count;
 			} else {
 				// Reset our entry_count variable:

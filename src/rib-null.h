@@ -22,6 +22,7 @@
 #include <arpa/inet.h>
 
 int rib_null_add_to_rib(rib_entry_t *in_entry);
+int rib_null_remove_expired_entries();
 int rib_null_dump_rib();
 
 #endif

@@ -16,9 +16,6 @@ typedef struct rib_ll_node_t {
 rib_ll_node_t *head;
 
 int rib_ll_init() {
-	//head = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
-	//memset(head, 0, sizeof(rib_ll_node_t));
-	//head->next = NULL;
 
 	head = NULL;
 	return 0;
@@ -191,6 +188,35 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 #endif
 		return 1;
 	}
+}
+
+// Expire out old entries out of the rib:
+int rib_ll_remove_expired_entries() {
+
+	time_t now = time(NULL);
+	time_t expiration_time = now - RIP_ROUTE_TIMEOUT;
+	rib_ll_node_t *cur = head;
+
+
+	// Iterate over our linked list:
+	while ( cur != NULL ) {
+
+		// We have not received a recent RIP msg entry for node:
+		if ( cur->entry.recv_time < expiration_time ) {
+#if XRIPD_DEBUG == 1
+			char ipaddr[16];
+			char subnet[16];
+			char nexthop[16];
+			inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+			inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.subnet), subnet, sizeof(subnet));
+			inet_ntop(AF_INET, &(cur->entry.recv_from.sin_addr.s_addr), nexthop, sizeof(nexthop));
+			fprintf(stderr, "[l-list]: Node Expired: %p IP: %s %s NH: %s Metric: %02d Timestamp: %lld Next: %p -- Current Time: %lld Expiration Time: %lld\n",
+					cur, ipaddr, subnet, nexthop, ntohl(cur->entry.rip_msg_entry.metric), (long long)(cur->entry.recv_time), cur->next, (long long)now, (long long)expiration_time);
+#endif
+		}
+		cur = cur->next;
+	}
+	return 0;
 }
 
 int rib_ll_dump_rib() {
