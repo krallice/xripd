@@ -78,6 +78,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		timeout.tv_sec = RIB_SELECT_TIMEOUT;
 		timeout.tv_usec = 0;
 
+		// Wait up to a second for a packet to come in
 		sret = select(xripd_settings->p_rib_in[0] + 1, &readfds, NULL, NULL, &timeout);
 
 		// Error:
@@ -101,7 +102,6 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		// Timeout triggered:
 		} else {
 			if (entry_count < RIB_MAX_READ_IN ) {
-				(*xripd_settings->xripd_rib->remove_expired_entries)();
 				++entry_count;
 			} else {
 				// Reset our entry_count variable:
@@ -109,5 +109,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 				entry_count = 0;
 			}
 		}
+
+		(*xripd_settings->xripd_rib->remove_expired_entries)();
 	}
 }
