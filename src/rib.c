@@ -67,49 +67,62 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	// Amount of rip msg entries we can process before forcing execution to the timeout triggered path.
 	// This is to prevent a DoS due to a datagram flood:
 	int entry_count = 0;
+	int dump_count = 0;
 
+	// Main loop:
 	while (1) {
 
-		// Wipe our set of fds, and monitor our input pipe descriptor:
-		FD_ZERO(&readfds);
-		FD_SET(xripd_settings->p_rib_in[0], &readfds);
+		// Read up to RIB_MAX_READ_IN RIP Message Entries at a time:
+		while ( entry_count < RIB_MAX_READ_IN ) {
 
-		// Timeout value; (how often to poll)
-		timeout.tv_sec = RIB_SELECT_TIMEOUT;
-		timeout.tv_usec = 0;
+			// Wipe our set of fds, and monitor our input pipe descriptor:
+			FD_ZERO(&readfds);
+			FD_SET(xripd_settings->p_rib_in[0], &readfds);
 
-		// Wait up to a second for a packet to come in
-		sret = select(xripd_settings->p_rib_in[0] + 1, &readfds, NULL, NULL, &timeout);
+			// Timeout value; (how often to poll)
+			timeout.tv_sec = RIB_SELECT_TIMEOUT;
+			timeout.tv_usec = 0;
 
-		// Error:
-		if (sret < 0) {
-			fprintf(stderr, "[rib]: Unable to select() on pipe.\n");
-			return;
+			// Wait up to a second for a msg entry to come in
+			sret = select(xripd_settings->p_rib_in[0] + 1, &readfds, NULL, NULL, &timeout);
 
-		// Pipe sd is ready to be read:
-		} else if (sret && (entry_count < RIB_MAX_READ_IN)) { 
+			// Error:
+			if (sret < 0) {
+				fprintf(stderr, "[rib]: Unable to select() on pipe.\n");
+				return;
 
-			// Read struct sent from listening daemon over anon pipe:
-			// This is a blocking function, not an issue as we have select()ed on the 
-			// fdset containing the socket beforehand:
-			read(xripd_settings->p_rib_in[0], &in_entry, sizeof(rib_entry_t));
-			++entry_count;
-#if XRIPD_DEBUG == 1
-			rib_route_print(&in_entry);
-#endif
-			(*xripd_settings->xripd_rib->add_to_rib)(&in_entry);
+			// Pipe sd is ready to be read:
+			} else if (sret) { 
 
-		// Timeout triggered:
-		} else {
-			if (entry_count < RIB_MAX_READ_IN ) {
+				// Read struct sent from listening daemon over anon pipe:
+				// This is a blocking function, not an issue as we have select()ed on the 
+				// fdset containing the socket beforehand:
+				read(xripd_settings->p_rib_in[0], &in_entry, sizeof(rib_entry_t));
 				++entry_count;
+#if XRIPD_DEBUG == 1
+				rib_route_print(&in_entry);
+#endif
+				(*xripd_settings->xripd_rib->add_to_rib)(&in_entry);
+
+			// Select Timeout triggered, break out of loop:
 			} else {
-				// Reset our entry_count variable:
-				(*xripd_settings->xripd_rib->dump_rib)();
-				entry_count = 0;
+				break;
 			}
 		}
 
 		(*xripd_settings->xripd_rib->remove_expired_entries)();
+
+		if ( dump_count == 0 ) {
+			(*xripd_settings->xripd_rib->dump_rib)();
+			++dump_count;
+		} else {
+			++dump_count;
+			if (dump_count >= 5 ) {
+				dump_count = 0;
+			}
+		}
+
+		entry_count = 0;
+
 	}
 }
