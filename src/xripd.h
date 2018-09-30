@@ -44,6 +44,7 @@
 
 // RIP Variables
 #define RIP_ROUTE_TIMEOUT 5
+#define RIP_ROUTE_GC_TIMEOUT 10
 
 // Daemon Settings Structure:
 typedef struct xripd_settings_t {
