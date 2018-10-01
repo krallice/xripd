@@ -42,6 +42,7 @@ typedef struct rib_entry_t {
 typedef struct xripd_rib_t {
 	uint8_t rib_datastore;
 	int (*add_to_rib)(rib_entry_t*);
+	int (*remove_expired_entries)();
 	int (*dump_rib)();
 } xripd_rib_t;
 

@@ -23,6 +23,7 @@
 
 int rib_ll_init();
 int rib_ll_add_to_rib(rib_entry_t *in_entry);
+int rib_ll_remove_expired_entries();
 int rib_ll_dump_rib();
 
 #endif

@@ -33,6 +33,8 @@
 #define RIP_DATAGRAM_SIZE 512
 #define RIP_ENTRY_SIZE 20
 
+#define RIP_METRIC_INFINITY 16
+
 // RIP Header Defines:
 #define RIP_HEADER_REQUEST 1
 #define RIP_HEADER_RESPONSE 2
@@ -40,7 +42,9 @@
 // RIP Entry Defines:
 #define RIP_AFI_INET 2
 
-#define RIP_METRIC_INFINITY 16
+// RIP Variables
+#define RIP_ROUTE_TIMEOUT 45
+#define RIP_ROUTE_GC_TIMEOUT RIP_ROUTE_TIMEOUT + 120
 
 // Daemon Settings Structure:
 typedef struct xripd_settings_t {

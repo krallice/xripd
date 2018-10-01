@@ -16,9 +16,6 @@ typedef struct rib_ll_node_t {
 rib_ll_node_t *head;
 
 int rib_ll_init() {
-	//head = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
-	//memset(head, 0, sizeof(rib_ll_node_t));
-	//head->next = NULL;
 
 	head = NULL;
 	return 0;
@@ -191,6 +188,85 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 #endif
 		return 1;
 	}
+}
+
+// Expire out old entries out of the rib:
+int rib_ll_remove_expired_entries() {
+
+	time_t now = time(NULL);
+	time_t expiration_time = now - RIP_ROUTE_TIMEOUT;
+	time_t gc_time = now - RIP_ROUTE_GC_TIMEOUT;
+	rib_ll_node_t *cur = head;
+	rib_ll_node_t *last = head;
+	rib_ll_node_t *delnode;
+
+	// Iterate over our linked list:
+	while ( cur != NULL ) {
+
+		// We have not received a recent RIP msg entry for node, we have passed the expiration time
+		// but not yet the gc time. Route will be removed from routing table, but will persist in the rib:
+		if ( (cur->entry.recv_time < expiration_time) && 
+				(cur->entry.recv_time > gc_time) && 
+				(ntohl(cur->entry.rip_msg_entry.metric) < RIP_METRIC_INFINITY) ) {
+#if XRIPD_DEBUG == 1
+			char ipaddr[16];
+			char subnet[16];
+			char nexthop[16];
+			inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+			inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.subnet), subnet, sizeof(subnet));
+			inet_ntop(AF_INET, &(cur->entry.recv_from.sin_addr.s_addr), nexthop, sizeof(nexthop));
+			cur->entry.rip_msg_entry.metric = htonl(RIP_METRIC_INFINITY);
+			fprintf(stderr, "[l-list]: Node Expired (Metric set to %d): %p IP: %s %s NH: %s Metric: %02d Timestamp: %lld Next: %p -- Current Time: %lld Expiration Time: %lld\n",
+					RIP_METRIC_INFINITY, cur, ipaddr, subnet, nexthop, 
+					ntohl(cur->entry.rip_msg_entry.metric), (long long)(cur->entry.recv_time), cur->next, (long long)now, (long long)expiration_time);
+#endif
+			// Increment:
+			last = cur;
+			cur = cur->next;
+
+		// Need to delete:
+		} else if ( cur->entry.recv_time < gc_time ) { 
+#if XRIPD_DEBUG == 1
+			char ipaddr[16];
+			char subnet[16];
+			char nexthop[16];
+			inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+			inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.subnet), subnet, sizeof(subnet));
+			inet_ntop(AF_INET, &(cur->entry.recv_from.sin_addr.s_addr), nexthop, sizeof(nexthop));
+			fprintf(stderr, "[l-list]: Node Expired (Deleting from RIB): %p IP: %s %s NH: %s Metric: %02d Timestamp: %lld Next: %p -- Current Time: %lld Expiration Time: %lld\n",
+					cur, ipaddr, subnet, nexthop, ntohl(cur->entry.rip_msg_entry.metric), (long long)(cur->entry.recv_time), cur->next, (long long)now, (long long)expiration_time);
+#endif
+			// Deleting our head?
+			if ( cur == head ) {
+				// Increment head pointer:
+				head = cur->next;
+
+				// Free our current node for deletion, and reset current and last to new head node:
+				free(cur);
+				cur = head;
+				last = head;
+
+			// Deleting a middle node:
+			} else {
+				// Link our last node to bypass the current node for deletion:
+				last->next = cur->next;
+
+				// New pointer for deletion:
+				delnode = cur;
+				// increment cur:
+				cur = cur->next;
+				// Delete from memory
+				free(delnode);
+			}
+
+		// Time is still valid, Do not delete node, just increment:
+		} else {
+			// Increment:
+			last = cur;
+			cur = cur->next;
+		}
+	}
+	return 0;
 }
 
 int rib_ll_dump_rib() {
