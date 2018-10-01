@@ -67,7 +67,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	// Amount of rip msg entries we can process before forcing execution to the timeout triggered path.
 	// This is to prevent a DoS due to a datagram flood:
 	int entry_count = 0;
-	int dump_count = 0;
+	int dump_count = 1;
 
 	// Main loop:
 	while (1) {
@@ -112,14 +112,11 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 
 		(*xripd_settings->xripd_rib->remove_expired_entries)();
 
-		if ( dump_count == 0 ) {
+		if ( (dump_count % 5) == 0 ) {
 			(*xripd_settings->xripd_rib->dump_rib)();
-			++dump_count;
+			dump_count = 1;
 		} else {
 			++dump_count;
-			if (dump_count >= 5 ) {
-				dump_count = 0;
-			}
 		}
 
 		entry_count = 0;
