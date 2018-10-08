@@ -257,6 +257,9 @@ int main(int argc, char **argv) {
 		// Close writing end of rib_in pipe:
 		close(xripd_settings->p_rib_in[1]);
 
+		if ( init_netlink(xripd_settings) != 0) {
+			return 1;
+		}
 		rib_main_loop(xripd_settings);
 
 		return 0;

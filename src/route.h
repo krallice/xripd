@@ -1,7 +1,7 @@
 #ifndef XRIPD_ROUTE_H
 #define XRIPD_ROUTE_H
 
-#include "route.h"
+#include "xripd.h"
 
 // Standard Includes:
 #include <stdio.h>
@@ -19,5 +19,7 @@
 #include <linux/if_ether.h>
 #include <linux/if_arp.h>
 #include <arpa/inet.h>
+
+int init_netlink(xripd_settings_t *xripd_settings);
 
 #endif
