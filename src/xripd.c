@@ -1,5 +1,6 @@
 #include "xripd.h"
 #include "rib.h"
+#include "route.h"
 
 // Given an interface name string, find and set our interface number (as indexed by the kernel).
 // Populate our xripd_settings_t struct with this index value
