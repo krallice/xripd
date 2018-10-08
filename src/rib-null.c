@@ -1,9 +1,16 @@
+#include "rib.h"
 #include "rib-null.h"
 
-int rib_null_add_to_rib(rib_entry_t *in_entry) {
+int rib_null_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[null]: Add to RIB Success\n");
 #endif
+	// NULLify our route pointers:
+	ins_route = NULL;
+	del_route = NULL;
+
+	*route_ret = RIB_RET_NO_ACTION;
+
 	return 0;
 }
 

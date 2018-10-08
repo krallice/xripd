@@ -76,7 +76,7 @@ int rib_ll_node_compare(rib_entry_t *in_entry, rib_ll_node_t *cur) {
 	}
 }
 
-int rib_ll_add_to_rib(rib_entry_t *in_entry) {
+int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
 	rib_ll_node_t *cur = head;
 	rib_ll_node_t *last = head;
@@ -92,6 +92,7 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 			head = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
 			memcpy(&(head->entry), in_entry, sizeof(rib_entry_t));
 			head->next = NULL;
+			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 			
 		// Linked List already has atleast one entry:
@@ -113,12 +114,14 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 #if XRIPD_DEBUG == 1
 						fprintf(stderr, "[l-list]: Node:%p Worse Metric, NOT installing.\n", cur);
 #endif
+						*route_ret = RIB_RET_NO_ACTION;
 						return 0;
 
 					case LL_CMP_SAME_METRIC_DIFF_NEIGH:
 #if XRIPD_DEBUG == 1
 						fprintf(stderr, "[l-list]: Node:%p Different neighbour, same metric. NOT installing.\n", cur);
 #endif
+						*route_ret = RIB_RET_NO_ACTION;
 						return 0;
 
 					case LL_CMP_SAME_METRIC_SAME_NEIGH:
@@ -126,6 +129,7 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 						fprintf(stderr, "[l-list]: Node:%p Same neighbour, same metric. Updating recv_time\n", cur);
 #endif
 						cur->entry.recv_time = in_entry->recv_time;
+						*route_ret = RIB_RET_NO_ACTION;
 						return 0;
 
 					case LL_CMP_BETTER_METRIC:
@@ -134,6 +138,7 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 #endif
 						// Better metric, let's replace existing rib entry:
 						memcpy(&(cur->entry), in_entry, sizeof(rib_entry_t));
+						*route_ret = RIB_RET_REPLACE;
 						return 0;
 				}
 			}
@@ -144,6 +149,7 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 #endif
 			rib_ll_node_t *new = NULL;
 			rib_ll_new_node(new, in_entry, last);
+			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 		}
 
@@ -171,6 +177,7 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 #endif
 						head = cur->next;
 						free(cur);
+						*route_ret = RIB_RET_DELETE;
 						return 0;
 					// Another node?:
 					} else {
@@ -179,6 +186,7 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 #endif
 						last->next = cur->next;
 						free(cur);
+						*route_ret = RIB_RET_DELETE;
 						return 0;
 					}
 			}
@@ -186,6 +194,7 @@ int rib_ll_add_to_rib(rib_entry_t *in_entry) {
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "[l-list]: No route match for Infinity Metric Entry. Ignored.\n");
 #endif
+		*route_ret = RIB_RET_NO_ACTION;
 		return 1;
 	}
 }

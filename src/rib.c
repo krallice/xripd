@@ -60,17 +60,28 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	// Our RIB struct that the daemon passes to us:
 	rib_entry_t in_entry;
 
+	// select() variables:
 	fd_set readfds; // Set of file descriptors (in our case, only one) for select() to watch for
 	struct timeval timeout; // Time to wait for data in our select()ed socket
 	int sret; // select() return value
 
 	// Amount of rip msg entries we can process before forcing execution to the timeout triggered path.
-	// This is to prevent a DoS due to a datagram flood:
+	// This is to prevent a DoS due to a datagram flood. These variables deal with rate limiting our select loop:
 	int entry_count = 0;
 	int dump_count = 1;
 
+	// Variables to handle the add_to_rib function:
+	int add_rib_ret = 0; // result of our add_to_rib function:
+	rib_entry_t ins_route; // route to add to our kernel table (if any?)
+	rib_entry_t del_route; // route to delete from our kernel table (if any?)
+
 	// Main loop:
 	while (1) {
+
+		// Zeroise our return values for route table manipulations:
+		add_rib_ret = RIB_RET_NO_ACTION;
+		memset(&ins_route, 0, sizeof(ins_route));
+		memset(&del_route, 0, sizeof(del_route));
 
 		// Read up to RIB_MAX_READ_IN RIP Message Entries at a time:
 		while ( entry_count < RIB_MAX_READ_IN ) {
@@ -102,7 +113,39 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 				rib_route_print(&in_entry);
 #endif
-				(*xripd_settings->xripd_rib->add_to_rib)(&in_entry);
+				// Add our route recieved from the daemon to our rib.
+				// Determine what action we then need to apply to our routing table:
+				(*xripd_settings->xripd_rib->add_to_rib)(&add_rib_ret, &in_entry, &ins_route, &del_route);
+				switch (add_rib_ret) {
+					case RIB_RET_NO_ACTION:
+#if XRIPD_DEBUG == 1
+						fprintf(stderr, "[rib]: add_to_rib result: NO_ACTION. Not installing route.\n");
+#endif
+						break;
+					case RIB_RET_INSTALL_NEW:
+#if XRIPD_DEBUG == 1
+						fprintf(stderr, "[rib]: add_to_rib result: INSTALL_NEW. Installing new route.\n");
+#endif
+						break;
+
+					// Not yet implemented:
+					case RIB_RET_REPLACE:
+#if XRIPD_DEBUG == 1
+						fprintf(stderr, "[rib]: add_to_rib result: REPLACE. Replacing route with another.\n");
+#endif
+						break;
+					case RIB_RET_DELETE:
+#if XRIPD_DEBUG == 1
+						fprintf(stderr, "[rib]: add_to_rib result: DELETE. Deleting route.\n");
+#endif
+						break;
+
+					default:
+#if XRIPD_DEBUG == 1
+						fprintf(stderr, "[rib]: Undefined result from add_to_rib. Not installing route.\n");
+#endif
+						break;
+				}
 
 			// Select Timeout triggered, break out of loop:
 			} else {
