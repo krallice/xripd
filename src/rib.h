@@ -28,6 +28,9 @@
 #define XRIPD_RIB_DATASTORE_NULL 0x00
 #define XRIPD_RIB_DATASTORE_LINKEDLIST 0x01
 
+// Return values that our rib backing store may return
+// which drive the rib core logic to modify routes
+// in the kernel table
 #define RIB_RET_NO_ACTION 0x00
 #define RIB_RET_INSTALL_NEW 0x01
 #define RIB_RET_REPLACE 0x02
