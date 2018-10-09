@@ -48,7 +48,8 @@
 
 // Daemon Settings Structure:
 typedef struct xripd_settings_t {
-	int sd; 			// Socket Descriptor
+	int sd; 			// Socket Descriptor (for inbound RIP Packets)
+	int nlsd;			// Netlink Socket Descriptor (for route table manipulation)
 	char iface_name[IFNAMSIZ]; 	// Human String for an interface, ie. "eth3" or "enp0s3"
 	int iface_index; 		// Kernel index id for interface
 	struct xripd_rib_t *xripd_rib;		// Pointer to RIB
