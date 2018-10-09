@@ -22,5 +22,6 @@
 
 int init_netlink(xripd_settings_t *xripd_settings);
 int del_netlink(xripd_settings_t *xripd_settings);
+int netlink_install_new_route(xripd_settings_t *xripd_settings);
 
 #endif

@@ -127,6 +127,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 						fprintf(stderr, "[rib]: add_to_rib result: INSTALL_NEW. Installing new route.\n");
 #endif
+						netlink_install_new_route(xripd_settings);
 						break;
 
 					// Not yet implemented:

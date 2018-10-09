@@ -25,3 +25,9 @@ int del_netlink(xripd_settings_t *xripd_settings) {
 	xripd_settings->nlsd = 0;
 	return 0;
 }
+
+// Install new route into the table:
+int netlink_install_new_route(xripd_settings_t *xripd_settings) {
+
+	return 0;
+}
