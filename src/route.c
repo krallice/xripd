@@ -11,7 +11,7 @@ int init_netlink(xripd_settings_t *xripd_settings) {
 		return 1;
 	} else {
 #if XRIPD_DEBUG == 1
-		fprintf(stderr, "[rib]: RIB Process Started\n");
+		fprintf(stderr, "[route]: RIB Process Started\n");
 #endif
 	}
 
