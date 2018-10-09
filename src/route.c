@@ -11,10 +11,17 @@ int init_netlink(xripd_settings_t *xripd_settings) {
 		return 1;
 	} else {
 #if XRIPD_DEBUG == 1
-		fprintf(stderr, "[route]: Initialised AF_NETLINK Socket.\n");
+		fprintf(stderr, "[rib]: RIB Process Started\n");
 #endif
 	}
 
-	// Success:
+// Success:
+	return 0;
+}
+
+// Delete netlink socket:
+int del_netlink(xripd_settings_t *xripd_settings) {
+	close(xripd_settings->nlsd);
+	xripd_settings->nlsd = 0;
 	return 0;
 }

@@ -21,5 +21,6 @@
 #include <arpa/inet.h>
 
 int init_netlink(xripd_settings_t *xripd_settings);
+int del_netlink(xripd_settings_t *xripd_settings);
 
 #endif
