@@ -2,6 +2,7 @@
 #define XRIPD_ROUTE_H
 
 #include "xripd.h"
+#include "rib.h"
 
 // Standard Includes:
 #include <stdio.h>
@@ -20,8 +21,12 @@
 #include <linux/if_arp.h>
 #include <arpa/inet.h>
 
+// Netlink Specific:
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+
 int init_netlink(xripd_settings_t *xripd_settings);
 int del_netlink(xripd_settings_t *xripd_settings);
-int netlink_install_new_route(xripd_settings_t *xripd_settings);
+int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib);
 
 #endif

@@ -76,6 +76,9 @@ int rib_ll_node_compare(rib_entry_t *in_entry, rib_ll_node_t *cur) {
 	}
 }
 
+// Evaluate in_entry against our current RIB
+// Potentially return ins_route and/or del_route as return rib_entry_t types
+// which are used to add/delete desired routes from the kernel table:
 int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
 	rib_ll_node_t *cur = head;
@@ -92,6 +95,7 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 			head = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
 			memcpy(&(head->entry), in_entry, sizeof(rib_entry_t));
 			head->next = NULL;
+			copy_rib_entry(in_entry, ins_route);
 			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 			

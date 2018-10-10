@@ -127,7 +127,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 						fprintf(stderr, "[rib]: add_to_rib result: INSTALL_NEW. Installing new route.\n");
 #endif
-						netlink_install_new_route(xripd_settings);
+						netlink_install_new_route(xripd_settings, &ins_route);
 						break;
 
 					// Not yet implemented:
@@ -167,4 +167,11 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		entry_count = 0;
 
 	}
+}
+
+// Copy RIB Entry from SRC to DST:
+void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst) {
+
+	memcpy(src, dst, sizeof(rib_entry_t));
+	return;
 }

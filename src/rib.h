@@ -56,5 +56,6 @@ typedef struct xripd_rib_t {
 
 int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore);
 void rib_main_loop(xripd_settings_t *xripd_settings);
+void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst);
 
 #endif
