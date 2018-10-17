@@ -51,6 +51,50 @@ void rib_route_print(rib_entry_t *in_entry) {
 
 }
 
+// Handler function:
+//	Pass in_entry to RIB
+//	Return value is add_rib_ret
+//	Depending on value of add_rib_ret, 
+//	Optional: ins_route will contain rib_entry_t for route to be installed into kernel's table
+// 	Optional: del_route will contain rib_entry_t for route to be deleted from the kernel's table
+void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
+
+	(*xripd_settings->xripd_rib->add_to_rib)(add_rib_ret, in_entry, ins_route, del_route);
+
+	switch (*add_rib_ret) {
+		case RIB_RET_NO_ACTION:
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[rib]: add_to_rib result: NO_ACTION. Not installing route.\n");
+#endif
+			break;
+		case RIB_RET_INSTALL_NEW:
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[rib]: add_to_rib result: INSTALL_NEW. Installing new route.\n");
+#endif
+			netlink_install_new_route(xripd_settings, ins_route);
+			break;
+
+		// Not yet implemented:
+		case RIB_RET_REPLACE:
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[rib]: add_to_rib result: REPLACE. Replacing route with another.\n");
+#endif
+			break;
+		case RIB_RET_DELETE:
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[rib]: add_to_rib result: DELETE. Deleting route.\n");
+#endif
+			break;
+
+		default:
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[rib]: Undefined result from add_to_rib. Not installing route.\n");
+#endif
+			break;
+	}
+
+}
+
 // Post-fork() entry, our process enters into this function
 // This is our main execution loop
 void rib_main_loop(xripd_settings_t *xripd_settings) {
@@ -77,8 +121,11 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[rib]: Adding Local Routes to RIB\n");
 #endif
-	int ret = netlink_read_local_routes(xripd_settings, &in_entry);
-
+	while ( netlink_add_local_routes_to_rib(xripd_settings, &in_entry) != 0 ) {
+#if XRIPD_DEBUG == 1
+		fprintf(stderr, "[rib]: Added Route from Kernel to RIB.\n");
+#endif
+	}
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[rib]: RIB Main Loop Started\n");
 #endif
@@ -120,40 +167,8 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 				rib_route_print(&in_entry);
 #endif
-				// Add our route recieved from the daemon to our rib.
-				// Determine what action we then need to apply to our routing table:
-				(*xripd_settings->xripd_rib->add_to_rib)(&add_rib_ret, &in_entry, &ins_route, &del_route);
-				switch (add_rib_ret) {
-					case RIB_RET_NO_ACTION:
-#if XRIPD_DEBUG == 1
-						fprintf(stderr, "[rib]: add_to_rib result: NO_ACTION. Not installing route.\n");
-#endif
-						break;
-					case RIB_RET_INSTALL_NEW:
-#if XRIPD_DEBUG == 1
-						fprintf(stderr, "[rib]: add_to_rib result: INSTALL_NEW. Installing new route.\n");
-#endif
-						netlink_install_new_route(xripd_settings, &ins_route);
-						break;
-
-					// Not yet implemented:
-					case RIB_RET_REPLACE:
-#if XRIPD_DEBUG == 1
-						fprintf(stderr, "[rib]: add_to_rib result: REPLACE. Replacing route with another.\n");
-#endif
-						break;
-					case RIB_RET_DELETE:
-#if XRIPD_DEBUG == 1
-						fprintf(stderr, "[rib]: add_to_rib result: DELETE. Deleting route.\n");
-#endif
-						break;
-
-					default:
-#if XRIPD_DEBUG == 1
-						fprintf(stderr, "[rib]: Undefined result from add_to_rib. Not installing route.\n");
-#endif
-						break;
-				}
+				// Compare in_entry to existing rib & add/delete from kernel if required:
+				add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
 
 			// Select Timeout triggered, break out of loop:
 			} else {
