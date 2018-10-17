@@ -220,7 +220,8 @@ int rib_ll_remove_expired_entries() {
 		// but not yet the gc time. Route will be removed from routing table, but will persist in the rib:
 		if ( (cur->entry.recv_time < expiration_time) && 
 				(cur->entry.recv_time > gc_time) && 
-				(ntohl(cur->entry.rip_msg_entry.metric) < RIP_METRIC_INFINITY) ) {
+				(ntohl(cur->entry.rip_msg_entry.metric) < RIP_METRIC_INFINITY) &&
+				(cur->entry.origin != RIB_ORIGIN_LOCAL) ) {
 #if XRIPD_DEBUG == 1
 			char ipaddr[16];
 			char subnet[16];
@@ -291,13 +292,20 @@ int rib_ll_dump_rib() {
 	char ipaddr[16];
 	char subnet[16];
 	char nexthop[16];
+
+	char origin_string[64];
 	
 	while ( cur != NULL ) {
 		inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
 		inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.subnet), subnet, sizeof(subnet));
 		inet_ntop(AF_INET, &(cur->entry.recv_from.sin_addr.s_addr), nexthop, sizeof(nexthop));
-		fprintf(stderr, "[l-list]: RIB Dump: Node: %p IP: %s %s NH: %s Metric: %02d Timestamp: %lld Next: %p\n", 
-				cur, ipaddr, subnet, nexthop, ntohl(cur->entry.rip_msg_entry.metric), (long long)cur->entry.recv_time, cur->next);
+		if ( cur->entry.origin == RIB_ORIGIN_LOCAL ) {
+			strcpy(origin_string, "LOC");
+		} else {
+			strcpy(origin_string, "REM");
+		}
+		fprintf(stderr, "[l-list]: RIB Dump: Node: %p IP: %s %s NH: %s Metric: %02d Origin: %s Timestamp: %lld Next: %p\n", 
+				cur, ipaddr, subnet, nexthop, ntohl(cur->entry.rip_msg_entry.metric), origin_string, (long long)cur->entry.recv_time, cur->next);
 		cur = cur->next;
 	}
 

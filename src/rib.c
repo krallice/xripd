@@ -157,6 +157,7 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 	in_entry.rip_msg_entry.metric = 0;
 	in_entry.recv_from.sin_addr.s_addr = 0; 
 	in_entry.recv_time = time(NULL);
+	in_entry.origin = RIB_ORIGIN_LOCAL;
 
 	// Process netmask:
 	netmask = route_entry->rtm_dst_len;
