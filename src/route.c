@@ -138,3 +138,149 @@ int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *ins
 
 	return 0;
 }
+
+void dump_rtm_newroute(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr) {
+
+	struct rtmsg *route_entry;
+
+	struct rtattr *route_attribute;
+	int len = 0;
+
+	uint8_t netmask = 0;
+
+	// Presentation Strings for Destination/Gateways:
+	char dst[32];
+	char gw[32];
+
+	route_entry = (struct rtmsg *)NLMSG_DATA(nlhdr);
+
+	// Make sure we're only looking at the main table routes, no special cases:
+	if (route_entry->rtm_table != RT_TABLE_MAIN) {
+		return;
+	}
+
+	// Get our attribute that sits within the entry message:
+	route_attribute = (struct rtattr *)RTM_RTA(route_entry);
+	len = RTM_PAYLOAD(nlhdr);
+
+	netmask = route_entry->rtm_dst_len;
+
+	while ( RTA_OK(route_attribute, len) ) {
+
+		switch (route_attribute->rta_type) {
+			case RTA_DST:
+				inet_ntop(AF_INET, RTA_DATA(route_attribute), dst, sizeof(dst));		
+				break;
+			case RTA_GATEWAY:
+				inet_ntop(AF_INET, RTA_DATA(route_attribute), gw, sizeof(gw));		
+				break;
+		}
+
+		route_attribute = RTA_NEXT(route_attribute, len);
+	}
+
+	fprintf(stderr, "[route]: %s/%d via %s.\n", dst, netmask, gw);
+}
+
+
+int netlink_read_local_routes(xripd_settings_t *xripd_settings, rib_entry_t *install_rib) {
+
+	struct {
+		struct nlmsghdr nl;
+		struct rtgenmsg rt_gen;
+		char buf[8192];
+	} req;
+
+	char buf[8192];
+
+	struct sockaddr_nl kernel_address;
+	
+	// Sending datastructures:
+	struct msghdr rtnl_msghdr;
+	struct iovec io_vec;
+
+	// Reply datastructures:
+	struct msghdr rtnl_msghdr_reply;
+	struct iovec io_vec_reply;
+
+	struct nlmsghdr *msg_ptr;
+	
+	int end_parse = 0;
+
+	memset(&kernel_address, 0, sizeof(kernel_address));
+	memset(&rtnl_msghdr, 0, sizeof(rtnl_msghdr));
+	memset(&io_vec, 0, sizeof(io_vec));
+
+	memset(&req, 0, sizeof(req));
+
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[route]: Sending NLM_F_DUMP request to kernel.\n");
+#endif
+
+	// Kernel's address for NETLINK sockets:
+	kernel_address.nl_family = AF_NETLINK;
+	kernel_address.nl_groups = 0;
+
+	req.nl.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtgenmsg));
+	req.nl.nlmsg_type = RTM_GETROUTE;
+	req.nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+	req.nl.nlmsg_seq = 1;
+	req.nl.nlmsg_pid = getpid();
+	req.rt_gen.rtgen_family = AF_INET;
+
+	io_vec.iov_base = &req;
+	io_vec.iov_len = req.nl.nlmsg_len;
+
+	rtnl_msghdr.msg_iov = &io_vec;
+	rtnl_msghdr.msg_iovlen = 1;
+	rtnl_msghdr.msg_name = &kernel_address;
+	rtnl_msghdr.msg_namelen = sizeof(kernel_address);
+
+	sendmsg(xripd_settings->nlsd, (struct msghdr *) &rtnl_msghdr, 0);
+
+	while(!end_parse) {
+
+		int len;
+
+		memset(&rtnl_msghdr_reply, 0, sizeof(rtnl_msghdr_reply));
+		memset(&io_vec_reply, 0, sizeof(io_vec_reply));
+	
+		io_vec_reply.iov_base = buf;
+		io_vec_reply.iov_len = sizeof(buf);
+
+		rtnl_msghdr_reply.msg_iov = &io_vec_reply;
+		rtnl_msghdr_reply.msg_iovlen = 1;
+		rtnl_msghdr_reply.msg_name = &kernel_address;
+		rtnl_msghdr_reply.msg_namelen = sizeof(kernel_address);
+
+		len = recvmsg(xripd_settings->nlsd, &rtnl_msghdr_reply, 0);
+		if (len) {
+			for (msg_ptr = (struct nlmsghdr *) buf; NLMSG_OK(msg_ptr, len); msg_ptr = NLMSG_NEXT(msg_ptr, len)) {
+
+				switch (msg_ptr->nlmsg_type) {
+
+					case NLMSG_DONE:
+						end_parse = 1;
+						break;
+
+					case RTM_NEWROUTE:
+#if XRIPD_DEBUG == 1
+						fprintf(stderr, "[route]: Route (Type: RTM_NEWROUTE / 24) received from kernel.\n");
+						dump_rtm_newroute(xripd_settings, msg_ptr);
+#endif
+						break;
+
+					default:
+						break;
+				}
+			}
+		} else {
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[route]: No AF_NETLINK reply received. Indicates bad socket.\n");
+#endif
+			return 0;
+		}
+	}
+
+	return 0;
+}
