@@ -55,11 +55,9 @@ void rib_route_print(rib_entry_t *in_entry) {
 // This is our main execution loop
 void rib_main_loop(xripd_settings_t *xripd_settings) {
 
-#if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib]: RIB Main Loop Started\n");
-#endif
 	// Our RIB struct that the daemon passes to us:
 	rib_entry_t in_entry;
+	memset(&in_entry, 0, sizeof(in_entry));
 
 	// select() variables:
 	fd_set readfds; // Set of file descriptors (in our case, only one) for select() to watch for
@@ -76,6 +74,14 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	rib_entry_t ins_route; // route to add to our kernel table (if any?)
 	rib_entry_t del_route; // route to delete from our kernel table (if any?)
 
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[rib]: Adding Local Routes to RIB\n");
+#endif
+	int ret = netlink_read_local_routes(xripd_settings, &in_entry);
+
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[rib]: RIB Main Loop Started\n");
+#endif
 	// Main loop:
 	while (1) {
 
