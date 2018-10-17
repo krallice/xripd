@@ -1,11 +1,5 @@
 #include "route.h"
 
-typedef struct rtnetlink_request_t {
-	struct nlmsghdr rtnetlink_header;
-	struct rtmsg rt_msg;
-	char buf[8192];
-} rtnetlink_request_t;
-
 // Function to create our netlink interface (used to install routes etc..):
 int init_netlink(xripd_settings_t *xripd_settings) {
 
