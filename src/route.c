@@ -141,17 +141,23 @@ int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *ins
 
 void dump_rtm_newroute(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr) {
 
+	// Pointer to our rtmsg. Each rtmsg may contain multiple attributes:
 	struct rtmsg *route_entry;
-
 	struct rtattr *route_attribute;
-	int len = 0;
+	int len = 0; // Attribute length
 
-	uint8_t netmask = 0;
-
-	// Presentation Strings for Destination/Gateways:
+	// Presentation strings for dst_ip & gw_ip:
 	char dst[32];
 	char gw[32];
+	uint8_t netmask = 0;
 
+	// Init our presentation strings:
+	memset(gw, 0, sizeof(gw));
+	memset(dst, 0, sizeof(dst));
+
+	// NLMSG_DATA()
+	// Return a pointer to the payload associated with the passed
+	// nlmsghdr.
 	route_entry = (struct rtmsg *)NLMSG_DATA(nlhdr);
 
 	// Make sure we're only looking at the main table routes, no special cases:
@@ -160,11 +166,18 @@ void dump_rtm_newroute(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr)
 	}
 
 	// Get our attribute that sits within the entry message:
+	// RTM_RTA(r), IFA_RTA(r), NDA_RTA(r), IFLA_RTA(r) and TCA_RTA(r):
+	// return a pointer to the start of the attributes of the respective RTNETLINK operation given the header of the RTNETLINK message (r):
 	route_attribute = (struct rtattr *)RTM_RTA(route_entry);
+
+	// RTM_PAYLOAD(n), IFA_PAYLOAD(n), NDA_PAYLOAD(n), IFLA_PAYLOAD(n) and TCA_PAYLOAD(n):
+	// return the total length of the attributes that follow the RTNETLINK operation header given the pointer to the NETLINK header (n).
 	len = RTM_PAYLOAD(nlhdr);
 
-	netmask = route_entry->rtm_dst_len;
-
+        // RTA_OK(rta, attrlen) returns true if rta points to a valid routing
+        // attribute; attrlen is the running length of the attribute buffer.
+        // When not true then you must assume there are no more attributes in
+        // the message, even if attrlen is nonzero.
 	while ( RTA_OK(route_attribute, len) ) {
 
 		switch (route_attribute->rta_type) {
@@ -176,10 +189,14 @@ void dump_rtm_newroute(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr)
 				break;
 		}
 
+		// Iterate over out attributes:
 		route_attribute = RTA_NEXT(route_attribute, len);
 	}
 
-	fprintf(stderr, "[route]: %s/%d via %s.\n", dst, netmask, gw);
+	netmask = route_entry->rtm_dst_len;
+
+	// Dump:
+	fprintf(stderr, "[route]: Received route from kernel table RT_TABLE_MAIN: %s/%d via %s.\n", dst, netmask, gw);
 }
 
 
@@ -265,7 +282,6 @@ int netlink_read_local_routes(xripd_settings_t *xripd_settings, rib_entry_t *ins
 
 					case RTM_NEWROUTE:
 #if XRIPD_DEBUG == 1
-						fprintf(stderr, "[route]: Route (Type: RTM_NEWROUTE / 24) received from kernel.\n");
 						dump_rtm_newroute(xripd_settings, msg_ptr);
 #endif
 						break;
