@@ -199,11 +199,7 @@ void dump_rtm_newroute(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr)
 	fprintf(stderr, "[route]: Received route from kernel table RT_TABLE_MAIN: %s/%d via %s.\n", dst, netmask, gw);
 }
 
-int netlink_add_local_routes_to_rib(xripd_settings_t *xripd_settings_t, rib_entry_t *install_rib) {
-	return 0;
-}
-
-int netlink_read_local_routes(xripd_settings_t *xripd_settings, rib_entry_t *install_rib) {
+int netlink_add_local_routes_to_rib(xripd_settings_t *xripd_settings) {
 
 	struct {
 		struct nlmsghdr nl;
@@ -287,6 +283,7 @@ int netlink_read_local_routes(xripd_settings_t *xripd_settings, rib_entry_t *ins
 #if XRIPD_DEBUG == 1
 						dump_rtm_newroute(xripd_settings, msg_ptr);
 #endif
+						add_local_route_to_rib(xripd_settings, msg_ptr);
 						break;
 
 					default:
@@ -297,7 +294,7 @@ int netlink_read_local_routes(xripd_settings_t *xripd_settings, rib_entry_t *ins
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[route]: No AF_NETLINK reply received. Indicates bad socket.\n");
 #endif
-			return 0;
+			return 1;
 		}
 	}
 

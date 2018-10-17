@@ -95,6 +95,76 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 
 }
 
+int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr) {
+
+	// Pointer to our rtmsg. Each rtmsg may contain multiple attributes:
+	struct rtmsg *route_entry;
+	struct rtattr *route_attribute;
+	int len = 0; // Attribute length
+
+	uint8_t netmask = 0;
+
+	rib_entry_t in_entry;
+	memset(&in_entry, 0, sizeof(rib_entry_t));
+
+	// For our add_entry_to_rib call:
+	int add_rib_ret = 0;
+	rib_entry_t ins_route;
+	rib_entry_t del_route;
+
+	memset(&ins_route, 0, sizeof(ins_route));
+	memset(&del_route, 0, sizeof(del_route));
+
+	// NLMSG_DATA()
+	// Return a pointer to the payload associated with the passed
+	// nlmsghdr.
+	route_entry = (struct rtmsg *)NLMSG_DATA(nlhdr);
+
+	// Make sure we're only looking at the main table routes, no special cases:
+	if (route_entry->rtm_table != RT_TABLE_MAIN) {
+		return 1;
+	}
+
+	// Get our attribute that sits within the entry message:
+	// RTM_RTA(r), IFA_RTA(r), NDA_RTA(r), IFLA_RTA(r) and TCA_RTA(r):
+	// return a pointer to the start of the attributes of the respective RTNETLINK operation given the header of the RTNETLINK message (r):
+	route_attribute = (struct rtattr *)RTM_RTA(route_entry);
+
+	// RTM_PAYLOAD(n), IFA_PAYLOAD(n), NDA_PAYLOAD(n), IFLA_PAYLOAD(n) and TCA_PAYLOAD(n):
+	// return the total length of the attributes that follow the RTNETLINK operation header given the pointer to the NETLINK header (n).
+	len = RTM_PAYLOAD(nlhdr);
+
+        // RTA_OK(rta, attrlen) returns true if rta points to a valid routing
+        // attribute; attrlen is the running length of the attribute buffer.
+        // When not true then you must assume there are no more attributes in
+        // the message, even if attrlen is nonzero.
+	while ( RTA_OK(route_attribute, len) ) {
+
+		switch (route_attribute->rta_type) {
+			case RTA_DST:
+				memcpy(&(in_entry.rip_msg_entry.ipaddr), RTA_DATA(route_attribute), sizeof(in_entry.rip_msg_entry.ipaddr));
+				break;
+			case RTA_GATEWAY:
+				memcpy(&(in_entry.rip_msg_entry.nexthop), RTA_DATA(route_attribute), sizeof(in_entry.rip_msg_entry.nexthop));
+				break;
+		}
+
+		// Iterate over out attributes:
+		route_attribute = RTA_NEXT(route_attribute, len);
+	}
+
+	in_entry.rip_msg_entry.afi = AF_INET;
+	in_entry.rip_msg_entry.metric = 0;
+	in_entry.recv_from.sin_addr.s_addr = 0; 
+	in_entry.recv_time = time(NULL);
+
+	// Process netmask:
+	in_entry.rip_msg_entry.subnet = 0xFFFFFFFF << (32 - netmask);
+
+	add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
+	return 0;
+}
+
 // Post-fork() entry, our process enters into this function
 // This is our main execution loop
 void rib_main_loop(xripd_settings_t *xripd_settings) {
@@ -118,18 +188,21 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	rib_entry_t ins_route; // route to add to our kernel table (if any?)
 	rib_entry_t del_route; // route to delete from our kernel table (if any?)
 
+	// To start with, add local routes to our RIB:
 #if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib]: Adding Local Routes to RIB\n");
+	fprintf(stderr, "[rib]: Adding Local Kernel Routes to RIB\n");
 #endif
-	while ( netlink_add_local_routes_to_rib(xripd_settings, &in_entry) != 0 ) {
+	if ( netlink_add_local_routes_to_rib(xripd_settings) == 0 ) {
 #if XRIPD_DEBUG == 1
-		fprintf(stderr, "[rib]: Added Route from Kernel to RIB.\n");
+		fprintf(stderr, "[rib]: Added routes from Kernel to RIB.\n");
+		(*xripd_settings->xripd_rib->dump_rib)();
 #endif
 	}
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[rib]: RIB Main Loop Started\n");
 #endif
-	// Main loop:
+	// Main loop.
+	// Start recieving routes from xripd-daemon picked up over the network:
 	while (1) {
 
 		// Zeroise our return values for route table manipulations:
