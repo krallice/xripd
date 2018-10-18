@@ -161,7 +161,9 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 
 	// Process netmask:
 	netmask = route_entry->rtm_dst_len;
-	in_entry.rip_msg_entry.subnet = htonl(0xFFFFFFFF << (32 - netmask));
+	if ( netmask != 0 ) {
+		in_entry.rip_msg_entry.subnet = htonl(0xFFFFFFFF << (32 - netmask));
+	}
 
 	add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
 	return 0;
