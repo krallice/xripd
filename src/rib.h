@@ -36,6 +36,10 @@
 #define RIB_RET_REPLACE 0x02
 #define RIB_RET_DELETE 0x03
 
+// Where did our route originate from:
+#define RIB_ORIGIN_LOCAL 0x00 // Locally originated from local interface
+#define RIB_ORIGIN_REMOTE 0x01 // Remotely learnt
+
 // The Rib is comprised of a logical ordering of rib_entry_t's
 // The raw data from a rip msg is held in rip_msg_entry and
 // related useful information is also packed in:
@@ -43,6 +47,7 @@ typedef struct rib_entry_t {
 	struct sockaddr_in recv_from;
 	time_t recv_time;
 	rip_msg_entry_t rip_msg_entry;
+	uint8_t origin;
 } rib_entry_t;
 
 // Abstraction, comprised of function pointers to underlying
@@ -58,4 +63,6 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore);
 void rib_main_loop(xripd_settings_t *xripd_settings);
 void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst);
 
+// Add a local route pointed to by nlmsghdr to the local rib:
+int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr);
 #endif
