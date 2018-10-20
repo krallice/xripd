@@ -239,7 +239,8 @@ int rib_ll_remove_expired_entries() {
 			cur = cur->next;
 
 		// Need to delete:
-		} else if ( cur->entry.recv_time < gc_time ) { 
+		} else if ( cur->entry.recv_time < gc_time && 
+				ntohl(cur->entry.rip_msg_entry.metric) >= RIP_METRIC_INFINITY) { 
 #if XRIPD_DEBUG == 1
 			char ipaddr[16];
 			char subnet[16];
