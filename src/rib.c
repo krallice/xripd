@@ -3,7 +3,9 @@
 #include "rib-ll.h"
 #include "rib-null.h"
 
+// Time to wait on reading the pipe from the daemon process, before proceeding with main loop:
 #define RIB_SELECT_TIMEOUT 1
+// Max amount of routes to read from the daemon process before proceeding with main loop:
 #define RIB_MAX_READ_IN 15
 
 // Init our xripd_rib_t structure.
@@ -62,8 +64,10 @@ void rib_route_print(rib_entry_t *in_entry) {
 // 	Optional: del_route will contain rib_entry_t for route to be deleted from the kernel's table
 void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
+	// Pass argument pointers straight through to the add_to_rib function:
 	(*xripd_settings->xripd_rib->add_to_rib)(add_rib_ret, in_entry, ins_route, del_route);
 
+	// Switch on the RIB's return behaviour
 	switch (*add_rib_ret) {
 		case RIB_RET_NO_ACTION:
 #if XRIPD_DEBUG == 1
@@ -77,7 +81,7 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 			netlink_install_new_route(xripd_settings, ins_route);
 			break;
 
-		// Not yet implemented:
+		// TODO: Not yet implemented:
 		case RIB_RET_REPLACE:
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[rib]: add_to_rib result: REPLACE. Replacing route with another.\n");
@@ -191,7 +195,7 @@ void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
 	// At this point, all kernel routes are in the RIB, however
 	// the RIB may contain outdated local routes that are no longer in the local
 	// kernel table anymore (local interfaces have been disabled or have failed)
-	(*xripd_settings->xripd_rib->invalidate_expired_local_routes)();
+	(*xripd_settings->xripd_rib->invalidate_expired_local_routes)((*xripd_settings->xripd_rib).last_local_poll);
 	
 	return;
 }

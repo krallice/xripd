@@ -216,8 +216,11 @@ int rib_ll_remove_expired_entries() {
 	// Iterate over our linked list:
 	while ( cur != NULL ) {
 
-		// We have not received a recent RIP msg entry for node, we have passed the expiration time
-		// but not yet the gc time. Route will be removed from routing table, but will persist in the rib:
+		// Do we need to INVALIDATE (Set metric to RIP_METRIC_INFINITY) the route, ie:
+		// 
+		// Is the route learnt remotely, but we have not received a recent advertisement for it within the timeout period?
+		// AND the route is not already invalidated
+		// BUT it's not yet time to purge it out of the table (RIP_ROUTE_GC_TIMEOUT):
 		if ( (cur->entry.recv_time < expiration_time) && 
 				(cur->entry.recv_time > gc_time) && 
 				(ntohl(cur->entry.rip_msg_entry.metric) < RIP_METRIC_INFINITY) &&
@@ -238,7 +241,10 @@ int rib_ll_remove_expired_entries() {
 			last = cur;
 			cur = cur->next;
 
-		// Need to delete:
+		// OR Do we need to delete the route completely out of the RIB:
+		//
+		// IE. Remote OR Local route, if we are definitely at RIP_METRIC_INFINITY
+		// and we've hit the garbage collection timeout, let's delete the route:
 		} else if ( cur->entry.recv_time < gc_time && 
 				ntohl(cur->entry.rip_msg_entry.metric) >= RIP_METRIC_INFINITY) { 
 #if XRIPD_DEBUG == 1
@@ -284,13 +290,45 @@ int rib_ll_remove_expired_entries() {
 	return 0;
 }
 
-int rib_ll_invalidate_expired_local_routes() {
+// Traverse datastructure for RIB_ORIGIN_LOCAL routes
+// which have a recv_time timestamp NOT EQUAL to the last netlink run
+// This means that the local route does not exist in the local kernel table anymore
+// Set metric to infinity so that it can be deleted eventually.
+// Return 1 if any routes were invalidated:
+int rib_ll_invalidate_expired_local_routes(time_t last_run) {
+
+	rib_ll_node_t *cur = head;
+	int ret = 0;
+
 #if XRIPD_DEBUG == 1
-	fprintf(stderr, "[l-list]: Expired local routes now invalidated. [DUMMY]\n");
+	char ipaddr[16];
+	fprintf(stderr, "[l-list]: Looking to invalidate any expired routes.\n");
 #endif
-	return 0;
+
+	// Traverse our linkedlist from head to end
+	while (cur != NULL) {
+
+		// If it's a local route that's recv_time looks out of date
+		// and is not already expired:
+		if (cur->entry.origin == RIB_ORIGIN_LOCAL &&
+		cur->entry.recv_time != last_run &&
+		cur->entry.rip_msg_entry.metric == 0 ) {
+#if XRIPD_DEBUG == 1
+			inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+			fprintf(stderr, "[l-list]: Expired Local Route for %s.\n", ipaddr);
+#endif
+			// Invalidate:
+			cur->entry.rip_msg_entry.metric = htonl(RIP_METRIC_INFINITY);
+			ret = 1;
+		}
+
+		cur = cur->next;
+	}
+
+	return ret;
 }
 
+// Dump our rib into stderr for debugging purposes:
 int rib_ll_dump_rib() {
 
 	rib_ll_node_t *cur = head;
