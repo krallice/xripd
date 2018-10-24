@@ -76,6 +76,9 @@ int rib_ll_node_compare(rib_entry_t *in_entry, rib_ll_node_t *cur) {
 	}
 }
 
+// Evaluate in_entry against our current RIB
+// Potentially return ins_route and/or del_route as return rib_entry_t types
+// which are used to add/delete desired routes from the kernel table:
 int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
 	rib_ll_node_t *cur = head;
@@ -92,6 +95,7 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 			head = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
 			memcpy(&(head->entry), in_entry, sizeof(rib_entry_t));
 			head->next = NULL;
+			copy_rib_entry(in_entry, ins_route);
 			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 			
@@ -216,7 +220,8 @@ int rib_ll_remove_expired_entries() {
 		// but not yet the gc time. Route will be removed from routing table, but will persist in the rib:
 		if ( (cur->entry.recv_time < expiration_time) && 
 				(cur->entry.recv_time > gc_time) && 
-				(ntohl(cur->entry.rip_msg_entry.metric) < RIP_METRIC_INFINITY) ) {
+				(ntohl(cur->entry.rip_msg_entry.metric) < RIP_METRIC_INFINITY) &&
+				(cur->entry.origin != RIB_ORIGIN_LOCAL) ) {
 #if XRIPD_DEBUG == 1
 			char ipaddr[16];
 			char subnet[16];
@@ -234,7 +239,8 @@ int rib_ll_remove_expired_entries() {
 			cur = cur->next;
 
 		// Need to delete:
-		} else if ( cur->entry.recv_time < gc_time ) { 
+		} else if ( cur->entry.recv_time < gc_time && 
+				ntohl(cur->entry.rip_msg_entry.metric) >= RIP_METRIC_INFINITY) { 
 #if XRIPD_DEBUG == 1
 			char ipaddr[16];
 			char subnet[16];
@@ -287,13 +293,20 @@ int rib_ll_dump_rib() {
 	char ipaddr[16];
 	char subnet[16];
 	char nexthop[16];
+
+	char origin_string[64];
 	
 	while ( cur != NULL ) {
 		inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
 		inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.subnet), subnet, sizeof(subnet));
 		inet_ntop(AF_INET, &(cur->entry.recv_from.sin_addr.s_addr), nexthop, sizeof(nexthop));
-		fprintf(stderr, "[l-list]: RIB Dump: Node: %p IP: %s %s NH: %s Metric: %02d Timestamp: %lld Next: %p\n", 
-				cur, ipaddr, subnet, nexthop, ntohl(cur->entry.rip_msg_entry.metric), (long long)cur->entry.recv_time, cur->next);
+		if ( cur->entry.origin == RIB_ORIGIN_LOCAL ) {
+			strcpy(origin_string, "LOC");
+		} else {
+			strcpy(origin_string, "REM");
+		}
+		fprintf(stderr, "[l-list]: RIB Dump: Node: %p IP: %s %s NH: %s Metric: %02d Origin: %s Timestamp: %lld Next: %p\n", 
+				cur, ipaddr, subnet, nexthop, ntohl(cur->entry.rip_msg_entry.metric), origin_string, (long long)cur->entry.recv_time, cur->next);
 		cur = cur->next;
 	}
 
