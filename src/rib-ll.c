@@ -284,6 +284,13 @@ int rib_ll_remove_expired_entries() {
 	return 0;
 }
 
+int rib_ll_invalidate_expired_local_routes() {
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[l-list]: Expired local routes now invalidated. [DUMMY]\n");
+#endif
+	return 0;
+}
+
 int rib_ll_dump_rib() {
 
 	rib_ll_node_t *cur = head;

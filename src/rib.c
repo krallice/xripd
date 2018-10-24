@@ -21,12 +21,14 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->add_to_rib = &rib_null_add_to_rib;
 		xripd_rib->dump_rib = &rib_null_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_null_remove_expired_entries;
+		xripd_rib->invalidate_expired_local_routes = &rib_null_invalidate_expired_local_routes;
 		xripd_settings->xripd_rib = xripd_rib;
 		return 0;
 	} else if ( rib_datastore == XRIPD_RIB_DATASTORE_LINKEDLIST ) {
 		xripd_rib->add_to_rib = &rib_ll_add_to_rib;
 		xripd_rib->dump_rib = &rib_ll_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_ll_remove_expired_entries;
+		xripd_rib->invalidate_expired_local_routes = &rib_ll_invalidate_expired_local_routes;
 		xripd_settings->xripd_rib = xripd_rib;
 		rib_ll_init();
 		return 0;
@@ -52,6 +54,7 @@ void rib_route_print(rib_entry_t *in_entry) {
 }
 
 // Handler function:
+// Recieves rib_entry_t as in_entry, and returns a add_rib_ret ret value depending on next action required re: kernel table:
 //	Pass in_entry to RIB
 //	Return value is add_rib_ret
 //	Depending on value of add_rib_ret, 
@@ -95,6 +98,8 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 
 }
 
+// Function called on each successive iteration of route returned from kernel via netlink.
+// Parses the netlink message, converts to a rib_entry_t struct, and passes control to the add_entry_to_rib function (above)
 int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr) {
 
 	// Pointer to our rtmsg. Each rtmsg may contain multiple attributes:
@@ -156,7 +161,7 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 	in_entry.rip_msg_entry.afi = AF_INET;
 	in_entry.rip_msg_entry.metric = 0;
 	in_entry.recv_from.sin_addr.s_addr = 0; 
-	in_entry.recv_time = time(NULL);
+	in_entry.recv_time = (*xripd_settings->xripd_rib).last_local_poll;
 	in_entry.origin = RIB_ORIGIN_LOCAL;
 
 	// Process netmask:
@@ -168,6 +173,29 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 	add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
 	return 0;
 }
+
+void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
+
+	// Set our last_local_poll_time to the current time:
+	(*xripd_settings->xripd_rib).last_local_poll = time(NULL);
+
+	// Poll the linux kernel using netlink to get ALL local routes
+	// Attempt to install each of these into our RIB:
+	if ( netlink_add_local_routes_to_rib(xripd_settings) == 0 ) {
+#if XRIPD_DEBUG == 1
+		fprintf(stderr, "[rib]: Added routes from Kernel to RIB.\n");
+		(*xripd_settings->xripd_rib->dump_rib)();
+#endif
+	}
+
+	// At this point, all kernel routes are in the RIB, however
+	// the RIB may contain outdated local routes that are no longer in the local
+	// kernel table anymore (local interfaces have been disabled or have failed)
+	(*xripd_settings->xripd_rib->invalidate_expired_local_routes)();
+	
+	return;
+}
+
 
 // Post-fork() entry, our process enters into this function
 // This is our main execution loop
@@ -196,6 +224,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[rib]: Adding Local Kernel Routes to RIB\n");
 #endif
+	(*xripd_settings->xripd_rib).last_local_poll = time(NULL);
 	if ( netlink_add_local_routes_to_rib(xripd_settings) == 0 ) {
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "[rib]: Added routes from Kernel to RIB.\n");
@@ -253,8 +282,13 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 			}
 		}
 
+		refresh_local_routes_into_rib(xripd_settings);
+		
+		// Set Metric = 16 for routes that have exceeded their time to live
+		// TODO: Actually implement a deletion function:
 		(*xripd_settings->xripd_rib->remove_expired_entries)();
 
+		// Dump our RIB only every 5th loop:
 		if ( (dump_count % 5) == 0 ) {
 			(*xripd_settings->xripd_rib->dump_rib)();
 			dump_count = 1;
@@ -263,7 +297,6 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		}
 
 		entry_count = 0;
-
 	}
 }
 

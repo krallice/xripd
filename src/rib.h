@@ -54,8 +54,10 @@ typedef struct rib_entry_t {
 // implementations relating to a 'datastore':
 typedef struct xripd_rib_t {
 	uint8_t rib_datastore;
+	time_t last_local_poll; // Time of our last netlink poll. Used to sync our rib with our local routes (determined through netlink).
 	int (*add_to_rib)(int*, rib_entry_t*, rib_entry_t*, rib_entry_t*);
 	int (*remove_expired_entries)();
+	int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
 	int (*dump_rib)();
 } xripd_rib_t;
 

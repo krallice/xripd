@@ -47,22 +47,6 @@ int del_netlink(xripd_settings_t *xripd_settings) {
 	return 0;
 }
 
-// Translate the rib_entry_t struct to a rtmsg that can then be sent through the NETLINK socket
-// to the kernel, to add/dete routes:
-int xlate_rib_entry_to_rtmsg(rib_entry_t *entry, struct rtmsg *route) {
-
-	route->rtm_family = AF_INET;
-	route->rtm_table = RT_TABLE_MAIN; // Global Routing Table
-	
-	route->rtm_protocol = RTPROT_STATIC; // Static Route
-	// Distance to destination, Universe = Global Route
-	route->rtm_scope = RT_SCOPE_UNIVERSE;
-	route->rtm_type = RTN_UNICAST; // Standard Unicast Route
-	
-	// Success
-	return 0;
-}
-
 // Install new route into the table:
 int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib) {
 
