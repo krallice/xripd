@@ -31,10 +31,10 @@
 // Return values that our rib backing store may return
 // which drive the rib core logic to modify routes
 // in the kernel table
-#define RIB_RET_NO_ACTION 0x00
-#define RIB_RET_INSTALL_NEW 0x01
-#define RIB_RET_REPLACE 0x02
-#define RIB_RET_DELETE 0x03
+#define RIB_RET_NO_ACTION 0x00 // RIB has determined that there is no change to RIB, can ignore route.
+#define RIB_RET_INSTALL_NEW 0x01 // Brand new route was installed in the RIB.
+#define RIB_RET_REPLACE 0x02 // Parameters for a prefix (metric/nethop) have changed.
+#define RIB_RET_INVALIDATE 0x03 // Route has been invalidated (Metric = INFINITY)
 
 // Where did our route originate from:
 #define RIB_ORIGIN_LOCAL 0x00 // Locally originated from local interface

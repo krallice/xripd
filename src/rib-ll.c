@@ -182,26 +182,12 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 					cur = cur->next;
 					break;
 				case LL_CMP_INFINITY_MATCH:
-					
-					// First node?:
-					if ( cur == head ) {
 #if XRIPD_DEBUG == 1
-						fprintf(stderr, "[l-list]: Infinity match for head node. Head to be removed.\n");
+					fprintf(stderr, "[l-list]: Route has been invalidated. \n");
 #endif
-						head = cur->next;
-						free(cur);
-						*route_ret = RIB_RET_DELETE;
-						return 0;
-					// Another node?:
-					} else {
-#if XRIPD_DEBUG == 1
-						fprintf(stderr, "[l-list]: Infinity match for node %p. Node to be removed.\n", cur);
-#endif
-						last->next = cur->next;
-						free(cur);
-						*route_ret = RIB_RET_DELETE;
-						return 0;
-					}
+					memcpy(&(cur->entry), in_entry, sizeof(rib_entry_t));
+					*route_ret = RIB_RET_INVALIDATE;
+					return 0;
 			}
 		}
 #if XRIPD_DEBUG == 1
