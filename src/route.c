@@ -47,33 +47,53 @@ int del_netlink(xripd_settings_t *xripd_settings) {
 	return 0;
 }
 
+// This is the utility function for adding the parameters to the packet. 
+int addattr_l(struct nlmsghdr *n, int maxlen, int type, void *data, int alen) { 
+
+	int len = RTA_LENGTH(alen); 
+	struct rtattr *rta; 
+
+	if (NLMSG_ALIGN(n->nlmsg_len) + len > maxlen) 
+		return -1; 
+	
+	rta = (struct rtattr*)(((char*)n) + NLMSG_ALIGN(n->nlmsg_len)); 
+	rta->rta_type = type; 
+	rta->rta_len = len; 
+
+	memcpy(RTA_DATA(rta), data, alen); 
+	n->nlmsg_len = NLMSG_ALIGN(n->nlmsg_len) + len; 
+
+	return 0; 
+}
+
 // Install new route into the table:
 int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib) {
 
+	// rtmsg struct with netlink message header:
 	struct {
 		struct nlmsghdr nl;
 		struct rtmsg rt;
-		char buf[8192];
 	} req;
 
-	struct sockaddr_nl addr;
-	struct rtattr *attr;
-	
-	int seq = 0;
-	int len = 0;
-	
-	// Message header (used in sendmsg):
-	// struct msghdr msg_header;
-	// struct iovec io_vector;
+	char buf[8192];
 
-	// Wipe buffer:
+	// Netlink socket address for the kernel:
+	struct sockaddr_nl kernel_address;
+
+	// Structs for sendmsg()
+	// Netlink packets get packed/referenced into these:
+	struct msghdr rtnl_msghdr;
+	struct iovec io_vec;
+
+	// Wipe buffer and associated structs:
+	memset(&kernel_address, 0, sizeof(kernel_address));
+	memset(&rtnl_msghdr, 0, sizeof(rtnl_msghdr));
+	memset(&io_vec, 0, sizeof(io_vec));
 	memset(&req, 0, sizeof(req));
 	
-	// struct for our send call
-	memset(&addr, 0, sizeof(struct sockaddr_nl));
-	addr.nl_family = AF_NETLINK;
-	addr.nl_pid = 0; // Packets are destined for the kernel
-	addr.nl_groups = 0; // MCAST not a requirement
+	// Address of our destination (the kernel):
+	kernel_address.nl_family = AF_NETLINK;
+	kernel_address.nl_groups = 0; // MCAST not a requirement
 
 	// Start to format our Netlink header:
 	// Datagram orientated REQUEST message, and request to CREATE a new object:
@@ -81,7 +101,7 @@ int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *ins
 	req.nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
 	req.nl.nlmsg_type = RTM_NEWROUTE; // Message type is RTM_NEWROUTE:
 	req.nl.nlmsg_pid = getpid();
-	req.nl.nlmsg_seq = seq++;
+	req.nl.nlmsg_seq = 0;
 
 	// Translate our RIB entry that needs to go into the routing table
 	req.rt.rtm_family = AF_INET;
@@ -89,30 +109,27 @@ int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *ins
 	req.rt.rtm_protocol = RTPROT_STATIC; // Static Route
 	req.rt.rtm_scope = RT_SCOPE_UNIVERSE; // Distance to destination, Universe = Global Route
 	req.rt.rtm_type = RTN_UNICAST; // Standard Unicast Route
-	req.rt.rtm_dst_len = 32;
+	req.rt.rtm_dst_len = 32; // Placeholder
 
-	len = sizeof(struct rtmsg);
+	addattr_l(&req.nl, sizeof(req), RTA_DST, &(install_rib->rip_msg_entry.ipaddr), 4);
+	addattr_l(&req.nl, sizeof(req), RTA_GATEWAY, &(install_rib->recv_from), 4);
 
-	// Route Attribute (Carrying IP Address):
-	attr = (struct rtattr *) req.buf;
-	attr->rta_type = RTA_DST;
-	attr->rta_len = sizeof(struct rtattr) + 4;
-	memcpy(((char *)attr) + sizeof(struct rtattr), &(install_rib->rip_msg_entry.ipaddr), 4);
-	len += attr->rta_len;
+	// Format for sendmsg:
+	io_vec.iov_base = &req;
+	io_vec.iov_len = req.nl.nlmsg_len;
 
-	// Route Attribute (Carrying Interface Index):
-	attr = (struct rtattr *) (((char *)attr) + attr->rta_len);
-	attr->rta_type = RTA_OIF;
-	attr->rta_len = sizeof(struct rtattr) + 4;
-	memcpy(((char *)attr) + sizeof(struct rtattr), &(xripd_settings->iface_index), 4);
-	len += attr->rta_len;
+	rtnl_msghdr.msg_name = &kernel_address;
+	rtnl_msghdr.msg_namelen = sizeof(kernel_address);
 
-	sendto(xripd_settings->nlsd,(void *) &req, req.nl.nlmsg_len, 0, 
-			(struct sockaddr *) &addr, sizeof(struct sockaddr_nl));
-
-	// Translate our RIB entry that needs to go into the routing table
-	// into a struct rtmsg (&new_route):
-	//xlate_rib_entry_to_rtmsg(install_rib, &new_route);
+	// Send to the kernel
+#if XRIPD_DEBUG == 1
+	char ipaddr[32];
+	char subnet[16];
+	inet_ntop(AF_INET, &(install_rib->rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+	inet_ntop(AF_INET, &(install_rib->rip_msg_entry.subnet), subnet, sizeof(subnet));
+	fprintf(stderr, "[route]: Sending NLM_F_CREATE Request to Kernel for %s %s.\n", ipaddr, subnet);
+#endif
+	sendmsg(xripd_settings->nlsd, (struct msghdr *) &rtnl_msghdr, 0);
 
 	return 0;
 }

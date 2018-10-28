@@ -20,18 +20,22 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	xripd_rib->rib_datastore = rib_datastore;
 
 	if ( rib_datastore == XRIPD_RIB_DATASTORE_NULL ) {
+
 		xripd_rib->add_to_rib = &rib_null_add_to_rib;
 		xripd_rib->dump_rib = &rib_null_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_null_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_null_invalidate_expired_local_routes;
 		xripd_settings->xripd_rib = xripd_rib;
+
 		return 0;
 	} else if ( rib_datastore == XRIPD_RIB_DATASTORE_LINKEDLIST ) {
+
 		xripd_rib->add_to_rib = &rib_ll_add_to_rib;
 		xripd_rib->dump_rib = &rib_ll_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_ll_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_ll_invalidate_expired_local_routes;
 		xripd_settings->xripd_rib = xripd_rib;
+
 		rib_ll_init();
 		return 0;
 	}
@@ -78,7 +82,15 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[rib]: add_to_rib result: INSTALL_NEW. Installing new route.\n");
 #endif
-			netlink_install_new_route(xripd_settings, ins_route);
+			// If the route was learnt via network/RIP, install into routing table:
+			if ( ins_route->origin == RIB_ORIGIN_REMOTE ) {
+				netlink_install_new_route(xripd_settings, ins_route);
+			} else {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "[rib]: Route origin not remote. No need to Netlink install.\n");
+#endif
+			}
+
 			break;
 
 		// TODO: Not yet implemented:
@@ -306,7 +318,6 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 
 // Copy RIB Entry from SRC to DST:
 void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst) {
-
 	memcpy(src, dst, sizeof(rib_entry_t));
 	return;
 }

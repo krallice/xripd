@@ -8,19 +8,23 @@
 #define LL_CMP_SAME_METRIC_DIFF_NEIGH 0x04
 #define LL_CMP_INFINITY_MATCH 0x05
 
+// Wrap the rib_entry_t data into a singularly linked list struct:
 typedef struct rib_ll_node_t {
 	rib_entry_t entry;
 	struct rib_ll_node_t *next;
 } rib_ll_node_t;
 
+// Global pointer to the head of the list
 rib_ll_node_t *head;
 
+// Not really needed?
 int rib_ll_init() {
-
 	head = NULL;
 	return 0;
 }
 
+// Responsible for the creation of a brand new rib_ll_node
+// Join onto the end of the *last node:
 int rib_ll_new_node(rib_ll_node_t *new, rib_entry_t *in_entry, rib_ll_node_t *last) {
 
 	new = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
@@ -95,7 +99,9 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 			head = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
 			memcpy(&(head->entry), in_entry, sizeof(rib_entry_t));
 			head->next = NULL;
-			copy_rib_entry(in_entry, ins_route);
+			// Prepare ins_route, and return:
+			// copy_rib_entry(in_entry, ins_route);
+			memcpy(ins_route, in_entry, sizeof(rib_entry_t));
 			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 			
@@ -153,6 +159,9 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 #endif
 			rib_ll_node_t *new = NULL;
 			rib_ll_new_node(new, in_entry, last);
+			// Prepare ins_route, and return:
+			//copy_rib_entry(in_entry, ins_route);
+			memcpy(ins_route, in_entry, sizeof(rib_entry_t));
 			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 		}
