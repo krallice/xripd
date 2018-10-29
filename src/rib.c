@@ -99,9 +99,9 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 			fprintf(stderr, "[rib]: add_to_rib result: REPLACE. Replacing route with another.\n");
 #endif
 			break;
-		case RIB_RET_DELETE:
+		case RIB_RET_INVALIDATE:
 #if XRIPD_DEBUG == 1
-			fprintf(stderr, "[rib]: add_to_rib result: DELETE. Deleting route.\n");
+			fprintf(stderr, "[rib]: add_to_rib result: INVALIDATE. Deleting route.\n");
 #endif
 			break;
 
@@ -121,9 +121,9 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 	// Pointer to our rtmsg. Each rtmsg may contain multiple attributes:
 	struct rtmsg *route_entry;
 	struct rtattr *route_attribute;
-	int len = 0; // Attribute length
 
-	uint8_t netmask = 0;
+	// Attribute length
+	int len = 0;
 
 	rib_entry_t in_entry;
 	memset(&in_entry, 0, sizeof(rib_entry_t));
@@ -143,6 +143,11 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 
 	// Make sure we're only looking at the main table routes, no special cases:
 	if (route_entry->rtm_table != RT_TABLE_MAIN) {
+		return 1;
+	}
+
+	// Ignore routes that we've installed ourselves (stop circular route installation)
+	if (route_entry->rtm_protocol == RTPROT_XRIPD ) {
 		return 1;
 	}
 
@@ -180,11 +185,8 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 	in_entry.recv_time = (*xripd_settings->xripd_rib).last_local_poll;
 	in_entry.origin = RIB_ORIGIN_LOCAL;
 
-	// Process netmask:
-	netmask = route_entry->rtm_dst_len;
-	if ( netmask != 0 ) {
-		in_entry.rip_msg_entry.subnet = htonl(0xFFFFFFFF << (32 - netmask));
-	}
+	// Process netmask (Convert from dstlen cidr to an actual netmask:
+	in_entry.rip_msg_entry.subnet = cidr_to_netmask_netorder(route_entry->rtm_dst_len);
 
 	add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
 	return 0;

@@ -61,10 +61,19 @@ typedef struct xripd_rib_t {
 	int (*dump_rib)();
 } xripd_rib_t;
 
+// Create our rib datastructure, which is essentially an interface to a concrete implementation, represented by rib_datastore.
+// Link this into the settings struct:
 int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore);
+
+// Main loop that the child process (xripd-rib) loops upon. Essentially the entry point for the child:
 void rib_main_loop(xripd_settings_t *xripd_settings);
+
+// Copy function for rib_entry_t:
 void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst);
 
 // Add a local route pointed to by nlmsghdr to the local rib:
 int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr);
+
+// Temporary header for debugging. Should only be a local function
+void rib_route_print(rib_entry_t *in_entry);
 #endif
