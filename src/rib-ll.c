@@ -185,7 +185,11 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 #if XRIPD_DEBUG == 1
 					fprintf(stderr, "[l-list]: Route has been invalidated. \n");
 #endif
+					// Replace the entry in the rib with our invalidated in_entry
 					memcpy(&(cur->entry), in_entry, sizeof(rib_entry_t));
+
+					// Return with our invalidated route, ready to process:
+					memcpy(del_route, in_entry, sizeof(rib_entry_t));
 					*route_ret = RIB_RET_INVALIDATE;
 					return 0;
 			}

@@ -103,6 +103,15 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[rib]: add_to_rib result: INVALIDATE. Deleting route.\n");
 #endif
+
+			// If the route was learnt remotely, let's blow it out of our kernel's table:
+			if ( del_route->origin == RIB_ORIGIN_REMOTE ) {
+				netlink_delete_new_route(xripd_settings, del_route);
+			} else {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "[rib]: Route origin not remote. No need to Netlink delete.\n");
+#endif
+			}
 			break;
 
 		default:
