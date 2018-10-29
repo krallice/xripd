@@ -97,12 +97,21 @@ uint32_t cidr_to_netmask_netorder(int cidr) {
 
 // Given a reference to req, prepare the netlink header
 // nlmsg_type (ex. RTM_NEWROUTE) must be provided
-void prepare_req_nlhdr_rtm(req_t *req, int nlmsg_type, rib_entry_t *entry) {
+void prepare_req_nlhdr_rtm(req_t *req, int nlmsg_type, rib_entry_t *entry, int replace_flag) {
 
 	// Format our Netlink header:
 	// Datagram orientated REQUEST message, and request to CREATE a new object:
 	req->nl.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg)); // Set length of msg in header:
-	req->nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
+
+	// Replace or append:
+	if ( replace_flag ) {
+		fprintf(stderr, "REEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEPLACE\n");
+		req->nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE;
+	} else {
+		req->nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
+	}
+	
+	// Assign our type:
 	req->nl.nlmsg_type = nlmsg_type;
 
 	// Route Msg Headers
@@ -183,7 +192,7 @@ int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *ins
 	memset(&req, 0, sizeof(req));
 
 	// Prepare the netlink header contained in req:
-	prepare_req_nlhdr_rtm(&req, RTM_NEWROUTE, install_rib);
+	prepare_req_nlhdr_rtm(&req, RTM_NEWROUTE, install_rib, 0);
 
 	// Prepare our RTAs given install_rib:
 	prepare_req_rtm_newroute_rtas(&req, xripd_settings, install_rib);
@@ -229,7 +238,7 @@ int netlink_delete_new_route(xripd_settings_t *xripd_settings, rib_entry_t *del_
 	memset(&req, 0, sizeof(req));
 
 	// Prepare the netlink header contained in req:
-	prepare_req_nlhdr_rtm(&req, RTM_DELROUTE, del_entry);
+	prepare_req_nlhdr_rtm(&req, RTM_DELROUTE, del_entry, 0);
 
 	// Prepare our RTAs given del_entry:
 	prepare_req_rtm_newroute_rtas(&req, xripd_settings, del_entry);
@@ -243,6 +252,52 @@ int netlink_delete_new_route(xripd_settings_t *xripd_settings, rib_entry_t *del_
 	char subnet[16];
 	inet_ntop(AF_INET, &(del_entry->rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
 	inet_ntop(AF_INET, &(del_entry->rip_msg_entry.subnet), subnet, sizeof(subnet));
+	fprintf(stderr, "[route]: Sending NLM_F_CREATE Request to Kernel for %s %s.\n", ipaddr, subnet);
+#endif
+	len = sendmsg(xripd_settings->nlsd, &rtnl_msghdr, 0);
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[route]: sendmsg len was %d.\n", len);
+#endif
+	return 0;
+}
+
+// Given a new route (install_rib), install this into the routing table:
+int netlink_replace_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib) {
+
+	// rtmsg struct with netlink message header:
+	req_t req;
+
+	int len = 0;
+	
+	// Netlink socket address for the kernel:
+	struct sockaddr_nl kernel_address;
+
+	// Structs for sendmsg()
+	// Netlink packets get packed/referenced into these:
+	struct msghdr rtnl_msghdr;
+	struct iovec io_vec;
+
+	// Wipe buffer and associated structs:
+	memset(&kernel_address, 0, sizeof(kernel_address));
+	memset(&rtnl_msghdr, 0, sizeof(rtnl_msghdr));
+	memset(&io_vec, 0, sizeof(io_vec));
+	memset(&req, 0, sizeof(req));
+
+	// Prepare the netlink header contained in req:
+	prepare_req_nlhdr_rtm(&req, RTM_NEWROUTE, install_rib, 1);
+
+	// Prepare our RTAs given install_rib:
+	prepare_req_rtm_newroute_rtas(&req, xripd_settings, install_rib);
+
+	// Prepare our msgheader used for sendmsg:
+	prepare_msghdr(&rtnl_msghdr, &io_vec, &req, &kernel_address);
+
+	// Send to the kernel
+#if XRIPD_DEBUG == 1
+	char ipaddr[32];
+	char subnet[16];
+	inet_ntop(AF_INET, &(install_rib->rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+	inet_ntop(AF_INET, &(install_rib->rip_msg_entry.subnet), subnet, sizeof(subnet));
 	fprintf(stderr, "[route]: Sending NLM_F_CREATE Request to Kernel for %s %s.\n", ipaddr, subnet);
 #endif
 	len = sendmsg(xripd_settings->nlsd, &rtnl_msghdr, 0);

@@ -148,6 +148,9 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 #endif
 						// Better metric, let's replace existing rib entry:
 						memcpy(&(cur->entry), in_entry, sizeof(rib_entry_t));
+
+						// Return ins_route as our route to replace:
+						memcpy(ins_route, in_entry, sizeof(rib_entry_t));
 						*route_ret = RIB_RET_REPLACE;
 						return 0;
 				}

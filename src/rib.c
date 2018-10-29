@@ -73,11 +73,13 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 
 	// Switch on the RIB's return behaviour
 	switch (*add_rib_ret) {
+
 		case RIB_RET_NO_ACTION:
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[rib]: add_to_rib result: NO_ACTION. Not installing route.\n");
 #endif
 			break;
+
 		case RIB_RET_INSTALL_NEW:
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[rib]: add_to_rib result: INSTALL_NEW. Installing new route.\n");
@@ -90,20 +92,26 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 				fprintf(stderr, "[rib]: Route origin not remote. No need to Netlink install.\n");
 #endif
 			}
-
 			break;
 
-		// TODO: Not yet implemented:
 		case RIB_RET_REPLACE:
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[rib]: add_to_rib result: REPLACE. Replacing route with another.\n");
 #endif
+			// If the route was learnt remotely, let's blow it out of our kernel's table:
+			if ( ins_route->origin == RIB_ORIGIN_REMOTE ) {
+				netlink_replace_new_route(xripd_settings, ins_route);
+			} else {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "[rib]: Route origin not remote. No need to Netlink replace.\n");
+#endif
+			}
 			break;
+
 		case RIB_RET_INVALIDATE:
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[rib]: add_to_rib result: INVALIDATE. Deleting route.\n");
 #endif
-
 			// If the route was learnt remotely, let's blow it out of our kernel's table:
 			if ( del_route->origin == RIB_ORIGIN_REMOTE ) {
 				netlink_delete_new_route(xripd_settings, del_route);

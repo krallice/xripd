@@ -37,6 +37,7 @@ int netlink_add_local_routes_to_rib(xripd_settings_t *xripd_settings_t);
 
 int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib);
 int netlink_delete_new_route(xripd_settings_t *xripd_settings, rib_entry_t *del_entry);
+int netlink_replace_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib);
 
 // Helper translation functions between netmask and cidr:
 uint32_t cidr_to_netmask_netorder(int cidr);
