@@ -25,10 +25,20 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 
+#define RTPROT_XRIPD 33
+
+// Init and bind our netlink socket:
 int init_netlink(xripd_settings_t *xripd_settings);
+
+// Delete our socket
 int del_netlink(xripd_settings_t *xripd_settings);
-int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib);
-//int netlink_read_local_routes(xripd_settings_t *xripd_settings_t, rib_entry_t *install_rib);
+
 int netlink_add_local_routes_to_rib(xripd_settings_t *xripd_settings_t);
+
+int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib);
+
+// Helper translation functions between netmask and cidr:
+uint32_t cidr_to_netmask_netorder(int cidr);
+int netmask_to_cidr(uint32_t netmask);
 
 #endif

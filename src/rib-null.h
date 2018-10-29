@@ -23,6 +23,7 @@
 
 int rib_null_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route);
 int rib_null_remove_expired_entries();
+int rib_null_invalidate_expired_local_routes(time_t last_run);
 int rib_null_dump_rib();
 
 #endif

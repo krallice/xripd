@@ -8,19 +8,23 @@
 #define LL_CMP_SAME_METRIC_DIFF_NEIGH 0x04
 #define LL_CMP_INFINITY_MATCH 0x05
 
+// Wrap the rib_entry_t data into a singularly linked list struct:
 typedef struct rib_ll_node_t {
 	rib_entry_t entry;
 	struct rib_ll_node_t *next;
 } rib_ll_node_t;
 
+// Global pointer to the head of the list
 rib_ll_node_t *head;
 
+// Not really needed?
 int rib_ll_init() {
-
 	head = NULL;
 	return 0;
 }
 
+// Responsible for the creation of a brand new rib_ll_node
+// Join onto the end of the *last node:
 int rib_ll_new_node(rib_ll_node_t *new, rib_entry_t *in_entry, rib_ll_node_t *last) {
 
 	new = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
@@ -95,7 +99,9 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 			head = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
 			memcpy(&(head->entry), in_entry, sizeof(rib_entry_t));
 			head->next = NULL;
-			copy_rib_entry(in_entry, ins_route);
+			// Prepare ins_route, and return:
+			// copy_rib_entry(in_entry, ins_route);
+			memcpy(ins_route, in_entry, sizeof(rib_entry_t));
 			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 			
@@ -153,6 +159,9 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 #endif
 			rib_ll_node_t *new = NULL;
 			rib_ll_new_node(new, in_entry, last);
+			// Prepare ins_route, and return:
+			//copy_rib_entry(in_entry, ins_route);
+			memcpy(ins_route, in_entry, sizeof(rib_entry_t));
 			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 		}
@@ -173,26 +182,12 @@ int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_ro
 					cur = cur->next;
 					break;
 				case LL_CMP_INFINITY_MATCH:
-					
-					// First node?:
-					if ( cur == head ) {
 #if XRIPD_DEBUG == 1
-						fprintf(stderr, "[l-list]: Infinity match for head node. Head to be removed.\n");
+					fprintf(stderr, "[l-list]: Route has been invalidated. \n");
 #endif
-						head = cur->next;
-						free(cur);
-						*route_ret = RIB_RET_DELETE;
-						return 0;
-					// Another node?:
-					} else {
-#if XRIPD_DEBUG == 1
-						fprintf(stderr, "[l-list]: Infinity match for node %p. Node to be removed.\n", cur);
-#endif
-						last->next = cur->next;
-						free(cur);
-						*route_ret = RIB_RET_DELETE;
-						return 0;
-					}
+					memcpy(&(cur->entry), in_entry, sizeof(rib_entry_t));
+					*route_ret = RIB_RET_INVALIDATE;
+					return 0;
 			}
 		}
 #if XRIPD_DEBUG == 1
@@ -216,8 +211,11 @@ int rib_ll_remove_expired_entries() {
 	// Iterate over our linked list:
 	while ( cur != NULL ) {
 
-		// We have not received a recent RIP msg entry for node, we have passed the expiration time
-		// but not yet the gc time. Route will be removed from routing table, but will persist in the rib:
+		// Do we need to INVALIDATE (Set metric to RIP_METRIC_INFINITY) the route, ie:
+		// 
+		// Is the route learnt remotely, but we have not received a recent advertisement for it within the timeout period?
+		// AND the route is not already invalidated
+		// BUT it's not yet time to purge it out of the table (RIP_ROUTE_GC_TIMEOUT):
 		if ( (cur->entry.recv_time < expiration_time) && 
 				(cur->entry.recv_time > gc_time) && 
 				(ntohl(cur->entry.rip_msg_entry.metric) < RIP_METRIC_INFINITY) &&
@@ -238,7 +236,10 @@ int rib_ll_remove_expired_entries() {
 			last = cur;
 			cur = cur->next;
 
-		// Need to delete:
+		// OR Do we need to delete the route completely out of the RIB:
+		//
+		// IE. Remote OR Local route, if we are definitely at RIP_METRIC_INFINITY
+		// and we've hit the garbage collection timeout, let's delete the route:
 		} else if ( cur->entry.recv_time < gc_time && 
 				ntohl(cur->entry.rip_msg_entry.metric) >= RIP_METRIC_INFINITY) { 
 #if XRIPD_DEBUG == 1
@@ -284,6 +285,45 @@ int rib_ll_remove_expired_entries() {
 	return 0;
 }
 
+// Traverse datastructure for RIB_ORIGIN_LOCAL routes
+// which have a recv_time timestamp NOT EQUAL to the last netlink run
+// This means that the local route does not exist in the local kernel table anymore
+// Set metric to infinity so that it can be deleted eventually.
+// Return 1 if any routes were invalidated:
+int rib_ll_invalidate_expired_local_routes(time_t last_run) {
+
+	rib_ll_node_t *cur = head;
+	int ret = 0;
+
+#if XRIPD_DEBUG == 1
+	char ipaddr[16];
+	fprintf(stderr, "[l-list]: Looking to invalidate any expired routes.\n");
+#endif
+
+	// Traverse our linkedlist from head to end
+	while (cur != NULL) {
+
+		// If it's a local route that's recv_time looks out of date
+		// and is not already expired:
+		if (cur->entry.origin == RIB_ORIGIN_LOCAL &&
+		cur->entry.recv_time != last_run &&
+		cur->entry.rip_msg_entry.metric == 0 ) {
+#if XRIPD_DEBUG == 1
+			inet_ntop(AF_INET, &(cur->entry.rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+			fprintf(stderr, "[l-list]: Expired Local Route for %s.\n", ipaddr);
+#endif
+			// Invalidate:
+			cur->entry.rip_msg_entry.metric = htonl(RIP_METRIC_INFINITY);
+			ret = 1;
+		}
+
+		cur = cur->next;
+	}
+
+	return ret;
+}
+
+// Dump our rib into stderr for debugging purposes:
 int rib_ll_dump_rib() {
 
 	rib_ll_node_t *cur = head;

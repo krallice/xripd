@@ -21,6 +21,13 @@ int rib_null_remove_expired_entries() {
 	return 0;
 }
 
+int rib_null_invalidate_expired_local_routes(time_t last_run) {
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[null]: Local routes no longer in kernel set to metric 16. Obviously none..\n");
+#endif
+	return 0;
+}
+
 int rib_null_dump_rib() {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[null]: Dumping RIB, Empty no surprise ...\n");
