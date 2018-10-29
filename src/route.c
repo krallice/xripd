@@ -1,5 +1,11 @@
 #include "route.h"
 
+typedef struct req_t {
+	struct nlmsghdr nl;
+	struct rtmsg rt;
+	char buf[1024];
+} req_t;
+
 // Function to create our netlink interface (used to install routes etc..):
 int init_netlink(xripd_settings_t *xripd_settings) {
 
@@ -89,23 +95,79 @@ uint32_t cidr_to_netmask_netorder(int cidr) {
 	}
 }
 
-// Given a new route (install_rib), install this into the routing table:
-int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib) {
+// Given a reference to req, prepare the netlink header
+// nlmsg_type (ex. RTM_NEWROUTE) must be provided
+void prepare_req_nlhdr_rtm(req_t *req, int nlmsg_type, rib_entry_t *entry) {
 
-	// rtmsg struct with netlink message header:
-	struct {
-		struct nlmsghdr nl;
-		struct rtmsg rt;
-		char buf[1024];
-	} req;
+	// Format our Netlink header:
+	// Datagram orientated REQUEST message, and request to CREATE a new object:
+	req->nl.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg)); // Set length of msg in header:
+	req->nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
+	req->nl.nlmsg_type = nlmsg_type;
 
-	int len = 0;
+	// Route Msg Headers
+	// Translate our RIB entry that needs to go into the routing table
+	req->rt.rtm_family = AF_INET;
+	req->rt.rtm_table = RT_TABLE_MAIN; // Global Routing Table
+	req->rt.rtm_scope = RT_SCOPE_UNIVERSE; // Distance to destination, Universe = Global Route
+	// Custom Route Protocol for XRIPD. Defined in route.h.
+	// Used to differentiate locally learnt/added routes from routes added via our daemon
+	req->rt.rtm_protocol = RTPROT_XRIPD; 	
+	req->rt.rtm_type = RTN_UNICAST; // Standard Unicast Route
+
+	// Required to convert netmask(which rip uses) to cidr(which netlink uses):
+	req->rt.rtm_dst_len = netmask_to_cidr(entry->rip_msg_entry.subnet);
+
+	return;
+}
+
+// Prepare the RTAs for a RTM_NEWROUTE message:
+void prepare_req_rtm_newroute_rtas(req_t *req, xripd_settings_t *xripd_settings, rib_entry_t *entry) {
 	
 	// Attribute Variables:
 	int index = 0;
 	uint8_t dst[4];
 	uint8_t gw[4];
 
+	// Format and copy attributes into our message:
+	index = xripd_settings->iface_index;
+	memcpy(dst, &(entry->rip_msg_entry.ipaddr), 4);
+	memcpy(gw, &(entry->recv_from.sin_addr.s_addr), 4);
+
+	addattr_l(&req->nl, sizeof(*req), RTA_OIF, &index, sizeof(index));
+	addattr_l(&req->nl, sizeof(*req), RTA_DST, dst, 4);
+	addattr_l(&req->nl, sizeof(*req), RTA_GATEWAY, gw, 4);
+}
+
+// Format and prepare msghdr (which is used in the sendmsg abi):
+void prepare_msghdr(struct msghdr *rtnl_msghdr, struct iovec *io_vec, struct req_t *req, struct sockaddr_nl *kernel_address) {
+
+	// Address of our destination (the kernel):
+	kernel_address->nl_family = AF_NETLINK;
+	kernel_address->nl_pid = 0; // Destined for kernel
+	kernel_address->nl_groups = 0; // MCAST not a requirement
+
+	// Format for sendmsg:
+	io_vec->iov_base = &(req->nl);
+	io_vec->iov_len = req->nl.nlmsg_len;
+
+	rtnl_msghdr->msg_name = kernel_address;
+	rtnl_msghdr->msg_namelen = sizeof(*kernel_address);
+
+	rtnl_msghdr->msg_iovlen = 1; // Only one buffer to send
+	rtnl_msghdr->msg_iov = io_vec;
+
+	return;
+}
+
+// Given a new route (install_rib), install this into the routing table:
+int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *install_rib) {
+
+	// rtmsg struct with netlink message header:
+	req_t req;
+
+	int len = 0;
+	
 	// Netlink socket address for the kernel:
 	struct sockaddr_nl kernel_address;
 
@@ -120,29 +182,29 @@ int netlink_install_new_route(xripd_settings_t *xripd_settings, rib_entry_t *ins
 	memset(&io_vec, 0, sizeof(io_vec));
 	memset(&req, 0, sizeof(req));
 
-	// Format our Netlink header:
-	// Datagram orientated REQUEST message, and request to CREATE a new object:
-	req.nl.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg)); // Set length of msg in header:
-	req.nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE;
-	req.nl.nlmsg_type = RTM_NEWROUTE; // Message type is RTM_NEWROUTE:
+	// Prepare the netlink header contained in req:
+	prepare_req_nlhdr_rtm(&req, RTM_NEWROUTE, install_rib);
 
-	// Route Msg Headers
-	// Translate our RIB entry that needs to go into the routing table
-	req.rt.rtm_family = AF_INET;
-	req.rt.rtm_table = RT_TABLE_MAIN; // Global Routing Table
-	req.rt.rtm_scope = RT_SCOPE_UNIVERSE; // Distance to destination, Universe = Global Route
-	// Custom Route Protocol for XRIPD. Defined in route.h.
-	// Used to differentiate locally learnt/added routes from routes added via our daemon
-	req.rt.rtm_protocol = RTPROT_XRIPD; 	
-	req.rt.rtm_type = RTN_UNICAST; // Standard Unicast Route
+	// Prepare our RTAs given install_rib:
+	prepare_req_rtm_newroute_rtas(&req, xripd_settings, install_rib);
 
-	// Required to convert netmask(which rip uses) to cidr(which netlink uses):
-	req.rt.rtm_dst_len = netmask_to_cidr(install_rib->rip_msg_entry.subnet);
+	// Prepare our msgheader used for sendmsg:
+	prepare_msghdr(&rtnl_msghdr, &io_vec, &req, &kernel_address);
 
-	// Format and copy attributes into our message:
-	index = xripd_settings->iface_index;
-	memcpy(dst, &(install_rib->rip_msg_entry.ipaddr), 4);
-	memcpy(gw, &(install_rib->recv_from.sin_addr.s_addr), 4);
+	// Send to the kernel
+#if XRIPD_DEBUG == 1
+	char ipaddr[32];
+	char subnet[16];
+	inet_ntop(AF_INET, &(install_rib->rip_msg_entry.ipaddr), ipaddr, sizeof(ipaddr));
+	inet_ntop(AF_INET, &(install_rib->rip_msg_entry.subnet), subnet, sizeof(subnet));
+	fprintf(stderr, "[route]: Sending NLM_F_CREATE Request to Kernel for %s %s.\n", ipaddr, subnet);
+#endif
+	len = sendmsg(xripd_settings->nlsd, &rtnl_msghdr, 0);
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[route]: sendmsg len was %d.\n", len);
+#endif
+	return 0;
+}
 
 	addattr_l(&req.nl, sizeof(req), RTA_OIF, &index, sizeof(index));
 	addattr_l(&req.nl, sizeof(req), RTA_DST, dst, 4);
