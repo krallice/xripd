@@ -62,8 +62,37 @@ filter_node_t *init_filter_node(uint32_t addr, uint32_t mask) {
 	return n;
 }
 
+void dump_filter_list(filter_t *f) {
+
+	// Assign cur iterator:
+	filter_list_t *fl = f->filter_list;
+	filter_node_t *cur = fl->head;
+
+	char ipaddr[16];
+	char subnet[16];
+
+	fprintf(stderr, "[filter]: Dumping Filter List.\n");
+
+	while (cur != NULL) {
+		inet_ntop(AF_INET, &(cur->ipaddr), ipaddr, sizeof(ipaddr));
+		inet_ntop(AF_INET, &(cur->netmask), subnet, sizeof(ipaddr));
+		fprintf(stderr, "[filter]: Dump: Filter Node: %p Network: %s %s\n", cur, ipaddr, subnet);
+		cur = cur->next;
+	}
+	return;
+}
+
 // Given an input of address and mask, append to our filter list:
 int append_to_filter_list(filter_t *f, uint32_t addr, uint32_t mask) {
+
+#if XRIPD_DEBUG == 1
+	char ipaddr[16];
+	char subnet[16];
+
+	inet_ntop(AF_INET, &addr, ipaddr, sizeof(ipaddr));
+	inet_ntop(AF_INET, &mask, subnet, sizeof(ipaddr));
+	fprintf(stderr, "[filter]: Appending to filter %s %s\n", ipaddr, subnet);
+#endif
 
 	filter_list_t *fl = f->filter_list;
 

@@ -238,6 +238,22 @@ void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
 	return;
 }
 
+void rib_test_filter_init(xripd_rib_t *xripd_rib) {
+
+	uint32_t r1, r2, m1;
+
+	inet_pton(AF_INET, "192.168.1.0", &r1);
+	inet_pton(AF_INET, "192.168.7.0", &r2);
+	inet_pton(AF_INET, "255.255.255.0", &m1);
+
+	append_to_filter_list(xripd_rib->filter, r1, m1);
+	append_to_filter_list(xripd_rib->filter, r2, m1);
+
+	dump_filter_list(xripd_rib->filter);
+
+	return;
+}
+
 
 // Post-fork() entry, our process enters into this function
 // This is our main execution loop
@@ -261,6 +277,8 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	int add_rib_ret = 0; // result of our add_to_rib function:
 	rib_entry_t ins_route; // route to add to our kernel table (if any?)
 	rib_entry_t del_route; // route to delete from our kernel table (if any?)
+
+	rib_test_filter_init(xripd_settings->xripd_rib);
 
 	// To start with, add local routes to our RIB:
 #if XRIPD_DEBUG == 1

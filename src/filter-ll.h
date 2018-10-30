@@ -57,4 +57,6 @@ void destroy_filter(filter_t *f);
 // Append a route to the end of our filter list:
 int append_to_filter_list(filter_t *f, uint32_t addr, uint32_t mask);
 
+void dump_filter_list(filter_t *f);
+
 #endif
