@@ -28,7 +28,9 @@
 // Whitelist or Blacklist filter operation, and default value:
 #define XRIPD_FILTER_MODE_WHITELIST 0x00
 #define XRIPD_FILTER_MODE_BLACKLIST 0x01
-#define XRIPD_FILTER_MODE XRIPD_FILTER_MODE_BLACKLIST
+
+#define XRIPD_FILTER_RESULT_DENY 0x00
+#define XRIPD_FILTER_RESULT_ALLOW 0x01
 
 // Individual nodes of our filter:
 typedef struct filter_node_t {
@@ -56,6 +58,8 @@ void destroy_filter(filter_t *f);
 
 // Append a route to the end of our filter list:
 int append_to_filter_list(filter_t *f, uint32_t addr, uint32_t mask);
+
+int filter_route(filter_t *f, uint32_t addr, uint32_t mask);
 
 void dump_filter_list(filter_t *f);
 

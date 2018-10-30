@@ -19,6 +19,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 
 	// Init our filter:
 	xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_BLACKLIST);
+	//xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_WHITELIST);
 
 	// Assign our datastore function pointers
 	// (Implementation of our interface):
@@ -242,7 +243,7 @@ void rib_test_filter_init(xripd_rib_t *xripd_rib) {
 
 	uint32_t r1, r2, m1;
 
-	inet_pton(AF_INET, "192.168.1.0", &r1);
+	inet_pton(AF_INET, "10.6.13.0", &r1);
 	inet_pton(AF_INET, "192.168.7.0", &r2);
 	inet_pton(AF_INET, "255.255.255.0", &m1);
 
@@ -333,8 +334,12 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 				rib_route_print(&in_entry);
 #endif
+
+				// Pass route through filter, and if success, proceed with adding to rib/kernel:
+				if ( filter_route(xripd_settings->xripd_rib->filter,in_entry.rip_msg_entry.ipaddr, in_entry.rip_msg_entry.subnet) == XRIPD_FILTER_RESULT_ALLOW ) {
 				// Compare in_entry to existing rib & add/delete from kernel if required:
 				add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
+				}
 
 			// Select Timeout triggered, break out of loop:
 			} else {

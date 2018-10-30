@@ -119,3 +119,98 @@ int append_to_filter_list(filter_t *f, uint32_t addr, uint32_t mask) {
 		return 0;
 	}
 }
+
+static int filter_route_blacklist(filter_t *f, uint32_t *addr, uint32_t *mask) {
+	
+	// Assign cur iterator:
+	filter_list_t *fl = f->filter_list;
+	filter_node_t *cur = fl->head;
+
+#if XRIPD_DEBUG == 1
+	char ipaddr[16];
+	char subnet[16];
+	memset(ipaddr, 0, 16);
+	memset(subnet, 0, 16);
+
+	inet_ntop(AF_INET, addr, ipaddr, sizeof(ipaddr));
+	inet_ntop(AF_INET, mask, subnet, sizeof(ipaddr));
+	fprintf(stderr, "[filter]: Running %s %s through filter.\n", ipaddr, subnet);
+#endif
+
+	// Iterate over filter:
+	while (cur != NULL) {
+		// We have a match?
+		if (cur->ipaddr == *addr) {
+			if (cur->netmask == *mask) {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "[filter]: Filter match for %s %s. ROUTE DENIED.\n", ipaddr, subnet);
+#endif
+				return XRIPD_FILTER_RESULT_DENY;
+			}
+		}
+		// Iterate:
+		cur = cur->next;
+	}
+
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[filter]: No Match for %s %s. Route Allowed.\n", ipaddr, subnet);
+#endif
+	return XRIPD_FILTER_RESULT_ALLOW;
+}
+
+static int filter_route_whitelist(filter_t *f, uint32_t *addr, uint32_t *mask) {
+	
+	// Assign cur iterator:
+	filter_list_t *fl = f->filter_list;
+	filter_node_t *cur = fl->head;
+
+#if XRIPD_DEBUG == 1
+	char ipaddr[16];
+	char subnet[16];
+	memset(ipaddr, 0, 16);
+	memset(subnet, 0, 16);
+
+	inet_ntop(AF_INET, addr, ipaddr, sizeof(ipaddr));
+	inet_ntop(AF_INET, mask, subnet, sizeof(ipaddr));
+	fprintf(stderr, "[filter]: Running %s %s through filter.\n", ipaddr, subnet);
+#endif
+
+	// Iterate over filter:
+	while (cur != NULL) {
+		// We have a match?
+		if (cur->ipaddr == *addr) {
+			if (cur->netmask == *mask) {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "[filter]: Filter match for %s %s. Route Allowed.\n", ipaddr, subnet);
+#endif
+				return XRIPD_FILTER_RESULT_ALLOW;;
+			}
+		}
+		// Iterate:
+		cur = cur->next;
+	}
+
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[filter]: No Match for %s %s. ROUTE DENIED.\n", ipaddr, subnet);
+#endif
+	return XRIPD_FILTER_RESULT_DENY;
+}
+
+
+// Run our route past our filter
+// This is a simple conditional function call
+// depending on which 'mode' the filter is running in:
+int filter_route(filter_t *f, uint32_t addr, uint32_t mask) {
+
+	int res;
+
+	if (f->filter_mode == XRIPD_FILTER_MODE_BLACKLIST) {
+		res = filter_route_blacklist(f, &addr, &mask);
+	} else if (f->filter_mode == XRIPD_FILTER_MODE_WHITELIST) {
+		res = filter_route_whitelist(f, &addr, &mask);
+	} else {
+		res = XRIPD_FILTER_RESULT_DENY;
+	}
+
+	return res;
+}
