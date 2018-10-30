@@ -70,8 +70,18 @@ void dump_filter_list(filter_t *f) {
 
 	char ipaddr[16];
 	char subnet[16];
+	char mode[32];
+
+	if (f->filter_mode == XRIPD_FILTER_MODE_BLACKLIST) {
+		strcpy(mode, "Blacklist Filter");
+	} else if (f->filter_mode == XRIPD_FILTER_MODE_WHITELIST) {
+		strcpy(mode, "Whitelist Filter");
+	} else {
+		strcpy(mode, "ERROR: UNKNOWN FILTER");
+	}
 
 	fprintf(stderr, "[filter]: Dumping Filter List.\n");
+	fprintf(stderr, "[filter]: Filter Type: %s.\n", mode);
 
 	while (cur != NULL) {
 		inet_ntop(AF_INET, &(cur->ipaddr), ipaddr, sizeof(ipaddr));
