@@ -2,6 +2,7 @@
 #define XRIPD_RIB_H
 
 #include "xripd.h"
+#include "filter-ll.h"
 
 // Standard Includes:
 #include <stdio.h>
@@ -53,12 +54,17 @@ typedef struct rib_entry_t {
 // Abstraction, comprised of function pointers to underlying
 // implementations relating to a 'datastore':
 typedef struct xripd_rib_t {
+
 	uint8_t rib_datastore;
 	time_t last_local_poll; // Time of our last netlink poll. Used to sync our rib with our local routes (determined through netlink).
+	struct filter_t *filter; // Pointer to our filter struct for filtering routes in/out of the RIB
+
+	// Function pointers for underlying datastore implementations:
 	int (*add_to_rib)(int*, rib_entry_t*, rib_entry_t*, rib_entry_t*);
 	int (*remove_expired_entries)();
 	int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
 	int (*dump_rib)();
+
 } xripd_rib_t;
 
 // Create our rib datastructure, which is essentially an interface to a concrete implementation, represented by rib_datastore.
@@ -73,7 +79,4 @@ void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst);
 
 // Add a local route pointed to by nlmsghdr to the local rib:
 int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr);
-
-// Temporary header for debugging. Should only be a local function
-void rib_route_print(rib_entry_t *in_entry);
 #endif

@@ -14,11 +14,16 @@
 int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 
 	// Init and Zeroise:
-	xripd_rib_t *xripd_rib = (xripd_rib_t*)malloc(sizeof(xripd_rib_t));
-	memset(xripd_rib, 0, sizeof(xripd_rib_t));
+	xripd_rib_t *xripd_rib = (xripd_rib_t*)malloc(sizeof(*xripd_rib));
+	memset(xripd_rib, 0, sizeof(*xripd_rib));
 
+	// Init our filter:
+	xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_BLACKLIST);
+	//xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_WHITELIST);
+
+	// Assign our datastore function pointers
+	// (Implementation of our interface):
 	xripd_rib->rib_datastore = rib_datastore;
-
 	if ( rib_datastore == XRIPD_RIB_DATASTORE_NULL ) {
 
 		xripd_rib->add_to_rib = &rib_null_add_to_rib;
@@ -36,6 +41,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->invalidate_expired_local_routes = &rib_ll_invalidate_expired_local_routes;
 		xripd_settings->xripd_rib = xripd_rib;
 
+		// We can call a function on initialisation:
 		rib_ll_init();
 		return 0;
 	}
@@ -209,6 +215,8 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 	return 0;
 }
 
+// Scan through our local routes, and find anything in our RIB that no longer matches 
+// local routes. If that's the case, invalidate our routes in the RIB as required
 void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
 
 	// Set our last_local_poll_time to the current time:
@@ -228,6 +236,22 @@ void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
 	// kernel table anymore (local interfaces have been disabled or have failed)
 	(*xripd_settings->xripd_rib->invalidate_expired_local_routes)((*xripd_settings->xripd_rib).last_local_poll);
 	
+	return;
+}
+
+void rib_test_filter_init(xripd_rib_t *xripd_rib) {
+
+	uint32_t r1, r2, m1;
+
+	inet_pton(AF_INET, "10.6.13.0", &r1);
+	inet_pton(AF_INET, "192.168.7.0", &r2);
+	inet_pton(AF_INET, "255.255.255.0", &m1);
+
+	append_to_filter_list(xripd_rib->filter, r1, m1);
+	append_to_filter_list(xripd_rib->filter, r2, m1);
+
+	dump_filter_list(xripd_rib->filter);
+
 	return;
 }
 
@@ -254,6 +278,8 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	int add_rib_ret = 0; // result of our add_to_rib function:
 	rib_entry_t ins_route; // route to add to our kernel table (if any?)
 	rib_entry_t del_route; // route to delete from our kernel table (if any?)
+
+	rib_test_filter_init(xripd_settings->xripd_rib);
 
 	// To start with, add local routes to our RIB:
 #if XRIPD_DEBUG == 1
@@ -308,8 +334,12 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 #if XRIPD_DEBUG == 1
 				rib_route_print(&in_entry);
 #endif
+
+				// Pass route through filter, and if success, proceed with adding to rib/kernel:
+				if ( filter_route(xripd_settings->xripd_rib->filter,in_entry.rip_msg_entry.ipaddr, in_entry.rip_msg_entry.subnet) == XRIPD_FILTER_RESULT_ALLOW ) {
 				// Compare in_entry to existing rib & add/delete from kernel if required:
 				add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
+				}
 
 			// Select Timeout triggered, break out of loop:
 			} else {
@@ -317,6 +347,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 			}
 		}
 
+		// Refresh RIB's view of local routes. Invalidate any routes that are no longer local in the RIB:
 		refresh_local_routes_into_rib(xripd_settings);
 		
 		// Set Metric = 16 for routes that have exceeded their time to live
@@ -330,13 +361,6 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		} else {
 			++dump_count;
 		}
-
 		entry_count = 0;
 	}
-}
-
-// Copy RIB Entry from SRC to DST:
-void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst) {
-	memcpy(src, dst, sizeof(rib_entry_t));
-	return;
 }
