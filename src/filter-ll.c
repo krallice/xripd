@@ -14,7 +14,7 @@ filter_list_t *init_filter_list(void) {
 }
 
 // Destroy the filter_list_t struct:
-void destroy_filter_list(filter_list_t *fl) {
+static void destroy_filter_list(filter_list_t *fl) {
 
 	// Todo: code to traverse the filter nodes
 	
@@ -49,7 +49,7 @@ filter_t *init_filter(uint8_t mode) {
 }
 
 // Create a brand new node:
-filter_node_t *init_filter_node(uint32_t addr, uint32_t mask) {
+static filter_node_t *init_filter_node(uint32_t addr, uint32_t mask) {
 
 	// Init and zeroise:
 	filter_node_t *n = (filter_node_t*)malloc(sizeof(*n));
