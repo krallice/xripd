@@ -51,7 +51,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 }
 
 // Debug function to print the route recieved via the rib process:
-void rib_route_print(rib_entry_t *in_entry) {
+static void rib_route_print(const rib_entry_t *in_entry) {
 
 	char ipaddr[16];
 	char subnet[16];
@@ -72,7 +72,7 @@ void rib_route_print(rib_entry_t *in_entry) {
 //	Depending on value of add_rib_ret, 
 //	Optional: ins_route will contain rib_entry_t for route to be installed into kernel's table
 // 	Optional: del_route will contain rib_entry_t for route to be deleted from the kernel's table
-void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
+static void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
 	// Pass argument pointers straight through to the add_to_rib function:
 	(*xripd_settings->xripd_rib->add_to_rib)(add_rib_ret, in_entry, ins_route, del_route);
@@ -139,7 +139,7 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 
 // Function called on each successive iteration of route returned from kernel via netlink.
 // Parses the netlink message, converts to a rib_entry_t struct, and passes control to the add_entry_to_rib function (above)
-int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr) {
+int add_local_route_to_rib(xripd_settings_t *xripd_settings, const struct nlmsghdr *nlhdr) {
 
 	// Pointer to our rtmsg. Each rtmsg may contain multiple attributes:
 	struct rtmsg *route_entry;
@@ -217,7 +217,7 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 
 // Scan through our local routes, and find anything in our RIB that no longer matches 
 // local routes. If that's the case, invalidate our routes in the RIB as required
-void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
+static void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
 
 	// Set our last_local_poll_time to the current time:
 	(*xripd_settings->xripd_rib).last_local_poll = time(NULL);
@@ -239,7 +239,7 @@ void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
 	return;
 }
 
-void rib_test_filter_init(xripd_rib_t *xripd_rib) {
+static void rib_test_filter_init(xripd_rib_t *xripd_rib) {
 
 	uint32_t r1, r2, m1;
 

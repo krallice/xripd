@@ -78,5 +78,5 @@ void rib_main_loop(xripd_settings_t *xripd_settings);
 void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst);
 
 // Add a local route pointed to by nlmsghdr to the local rib:
-int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr);
+int add_local_route_to_rib(xripd_settings_t *xripd_settings, const struct nlmsghdr *nlhdr);
 #endif
