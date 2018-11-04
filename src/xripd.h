@@ -11,6 +11,8 @@
 #include <signal.h>
 #include <time.h>
 
+#include <getopt.h>
+
 // Network Specific:
 #include <arpa/inet.h>
 #include <sys/socket.h>

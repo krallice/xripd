@@ -64,6 +64,7 @@ typedef struct xripd_rib_t {
 	int (*remove_expired_entries)();
 	int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
 	int (*dump_rib)();
+	void (*destroy_rib)();
 
 } xripd_rib_t;
 
@@ -79,4 +80,7 @@ void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst);
 
 // Add a local route pointed to by nlmsghdr to the local rib:
 int add_local_route_to_rib(xripd_settings_t *xripd_settings, const struct nlmsghdr *nlhdr);
+
+// Destroy RIB completely
+void destroy_rib(xripd_settings_t *xripd_settings);
 #endif

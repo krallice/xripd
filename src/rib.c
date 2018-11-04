@@ -18,6 +18,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	memset(xripd_rib, 0, sizeof(*xripd_rib));
 
 	// Init our filter:
+	xripd_rib->filter = NULL;
 	xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_BLACKLIST);
 	//xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_WHITELIST);
 
@@ -30,6 +31,8 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->dump_rib = &rib_null_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_null_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_null_invalidate_expired_local_routes;
+		xripd_rib->destroy_rib = &rib_null_destroy_rib;
+
 		xripd_settings->xripd_rib = xripd_rib;
 
 		return 0;
@@ -39,6 +42,8 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->dump_rib = &rib_ll_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_ll_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_ll_invalidate_expired_local_routes;
+		xripd_rib->destroy_rib = &rib_ll_destroy_rib;
+
 		xripd_settings->xripd_rib = xripd_rib;
 
 		// We can call a function on initialisation:
@@ -48,6 +53,22 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 
 	// Error Out:
 	return 1;
+}
+
+void destroy_rib(xripd_settings_t *xripd_settings) {
+
+	// Destroy filter struct:
+	if ( xripd_settings->xripd_rib->filter != NULL ) {
+		destroy_filter(xripd_settings->xripd_rib->filter);
+	}
+	
+	// Destroy our rib datastore:
+	(*xripd_settings->xripd_rib->destroy_rib)();
+
+	// Finally, free ourselves:
+	free(xripd_settings->xripd_rib);
+
+	return;
 }
 
 // Debug function to print the route recieved via the rib process:

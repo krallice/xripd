@@ -40,4 +40,6 @@ int rib_ll_invalidate_expired_local_routes();
 
 // Dump rib:
 int rib_ll_dump_rib();
+
+void rib_ll_destroy_rib();
 #endif

@@ -100,12 +100,14 @@ static xripd_settings_t *init_xripd_settings() {
 	memset(xripd_settings, 0, sizeof(xripd_settings_t));
 
 	// Check interface string length, and copy if safe:
-	if ( strlen(XRIPD_PASSIVE_IFACE) <= IFNAMSIZ ) {
-		strcpy(xripd_settings->iface_name, XRIPD_PASSIVE_IFACE);
-	} else {
-		fprintf(stderr, "[daemon] Error, Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
-		return NULL;
-	}	
+	//if ( strlen(XRIPD_PASSIVE_IFACE) <= IFNAMSIZ ) {
+		//strcpy(xripd_settings->iface_name, XRIPD_PASSIVE_IFACE);
+	//} else {
+		//fprintf(stderr, "[daemon] Error, Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
+		//return NULL;
+	//}	
+	
+	xripd_settings->xripd_rib = NULL;
 
 	return xripd_settings;
 }
@@ -206,6 +208,63 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 	return 0;
 }
 
+// Print usage and pass exit status on:
+static void print_usage(int ret) {
+
+	fprintf(stderr, "usage: xripd [-h] -i <interface>\n");
+
+	fprintf(stderr, "params:\n");
+       	fprintf(stderr, "\t-i <interface>\t Bind RIP daemon to network interface\n");
+       	fprintf(stderr, "\t-h\t\t Display this help message\n");
+	exit(ret);
+}
+
+// Function to parse command line arguments
+static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) {
+
+	int option_index = 0;
+	int index_count = 0;
+
+	char *iface_name = NULL;
+
+	while ((option_index = getopt(*argc, argv, "i:")) != -1) {
+		switch(option_index) {
+			case 'i':
+				iface_name = optarg;
+				strcpy(xripd_settings->iface_name, iface_name);
+				break;
+			default:
+				print_usage(0);
+				return 1;
+		}
+		index_count++;
+	}
+
+	// No arguments were given, print usage to help the user
+	// and bomb out:
+	if (index_count == 0) {
+		print_usage(1);
+
+	}
+
+	return 0;
+}
+
+int destroy_xripd_settings(xripd_settings_t *xripd_settings) {
+
+	if ( xripd_settings != NULL ) {
+		if ( xripd_settings->xripd_rib != NULL ) {
+			destroy_rib(xripd_settings);
+		}
+
+		close(xripd_settings->p_rib_in[0]);
+		close(xripd_settings->p_rib_in[1]);
+
+		free(xripd_settings);
+	}
+	return 0;
+}
+
 int main(int argc, char **argv) {
 
 	// Init our settings:
@@ -214,21 +273,30 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
+	if ( parse_args(xripd_settings, &argc, argv) != 0 ) {
+		destroy_xripd_settings(xripd_settings);
+		return 1;
+	}
+
 	// Create pipe, used for sending rip message entries from the
 	// listening daemon to the rib process:
 	if (pipe(xripd_settings->p_rib_in) == -1) {
 		fprintf(stderr, "[daemon]: Unable to create rib_in pipe\n");
+		destroy_xripd_settings(xripd_settings);
 		return 1;
 	}
 
 	// Init our RIB with a specific datastore:
-	if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_LINKEDLIST) != 0)
+	if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_LINKEDLIST) != 0) {
+		destroy_xripd_settings(xripd_settings);
 		return 1;
+	}
 
-	pid_t f = fork();
+	// Fork:
+	pid_t rib_f = fork();
 
 	// Parent (xripd listener):
-	if (f > 0) {
+	if (rib_f > 0) {
 
 		char proc_name[] = "xripd-daemon";
 		strncpy(argv[0], proc_name, sizeof(proc_name));
@@ -238,18 +306,21 @@ int main(int argc, char **argv) {
 		
 		// Our listening socket for inbound RIPv2 packets:
 		if ( init_socket(xripd_settings) != 0) {
-			kill(f, SIGKILL);
+			kill(rib_f, SIGKILL);
 			return 1;
 		}
 
 		// Main Listening Loop
 		xripd_listen_loop(xripd_settings);
 
-		kill(f, SIGKILL);
+		// SHOULD NEVER REACH:
+		// xripd_listen_loop, should never return, but if it does:
+		destroy_xripd_settings(xripd_settings);
+		kill(rib_f, SIGKILL);
 		return 1;
 
 	// Child (xripd rib):
-	} else if (f == 0) {
+	} else if (rib_f == 0) {
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "[rib]: RIB Process Started\n");
 #endif
@@ -261,15 +332,26 @@ int main(int argc, char **argv) {
 		close(xripd_settings->p_rib_in[1]);
 
 		if ( init_netlink(xripd_settings) != 0) {
+			
+			// TODO: TELL PARENT TO CLOSE:
+			destroy_xripd_settings(xripd_settings);
 			return 1;
 		}
+		
+		// Main loop for the RIB:
 		rib_main_loop(xripd_settings);
 
-		return 0;
+		// SHOULD NEVER REACH:
+		// TODO: TELL PARENT TO CLOSE:
+		destroy_xripd_settings(xripd_settings);
+		return 1;
 
 	// Failed to fork():
-	} else if (f < 0) {
+	} else if (rib_f < 0) {
 		fprintf(stderr, "[daemon]: Failed to Fork RIB Process\n");
+		destroy_xripd_settings(xripd_settings);
 		return 1;
 	}
+
+	return 1;
 }

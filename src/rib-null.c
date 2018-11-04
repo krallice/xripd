@@ -34,3 +34,10 @@ int rib_null_dump_rib() {
 #endif
 	return 0;
 }
+
+void rib_null_destroy_rib() {
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[null]: Destroying RIB, Nothing to destroy ...\n");
+#endif
+	return;
+}
