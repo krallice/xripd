@@ -4,7 +4,7 @@
 
 // Given an interface name string, find and set our interface number (as indexed by the kernel).
 // Populate our xripd_settings_t struct with this index value
-int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
+static int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 
 	// Attempt to find interface index number of xripd_settings->iface_name
 	// If successful, interface index in ifrq->ifr_ifindex:
@@ -18,7 +18,7 @@ int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 }
 
 // Create our AF_INET SOCK_DGRAM listening socket:
-int init_socket(xripd_settings_t *xripd_settings) {
+static int init_socket(xripd_settings_t *xripd_settings) {
 
 	// Interface Request:
 	struct ifreq ifrq;
@@ -93,7 +93,7 @@ int init_socket(xripd_settings_t *xripd_settings) {
 }
 
 // Initialise our xripd_settings_t struct:
-xripd_settings_t *init_xripd_settings() {
+static xripd_settings_t *init_xripd_settings() {
 
 	// Init and Zeroise:
 	xripd_settings_t *xripd_settings = (xripd_settings_t*)malloc(sizeof(xripd_settings_t));
@@ -112,7 +112,7 @@ xripd_settings_t *init_xripd_settings() {
 
 // Encapsulate the raw rip_msg_entry_t from the datagram into a
 // rib_entry_t, and send to the rib process via the p_rib_in anon pipe:
-int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
+static int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
 
 	// Create our rib_entry:
 	rib_entry_t entry;
@@ -137,7 +137,7 @@ int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, st
 }
 
 // Listen on our DGRAM socket, and parse messages recieved:
-int xripd_listen_loop(xripd_settings_t *xripd_settings) {
+static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 
 	int len = 0;
 	char receive_buffer[RIP_DATAGRAM_SIZE];
