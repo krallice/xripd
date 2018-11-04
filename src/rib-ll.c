@@ -30,7 +30,7 @@ int rib_ll_init() {
 
 // Responsible for the creation of a brand new rib_ll_node
 // Join onto the end of the *last node:
-static int rib_ll_new_node(rib_ll_node_t *new, rib_entry_t *in_entry, rib_ll_node_t *last) {
+static int rib_ll_new_node(rib_ll_node_t *new, const rib_entry_t *in_entry, rib_ll_node_t *last) {
 
 	new = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
 	memset(new, 0, sizeof(rib_ll_node_t));
@@ -44,7 +44,7 @@ static int rib_ll_new_node(rib_ll_node_t *new, rib_entry_t *in_entry, rib_ll_nod
 	return 0;
 }
 
-static int rib_ll_node_compare(rib_entry_t *in_entry, rib_ll_node_t *cur) {
+static int rib_ll_node_compare(const rib_entry_t *in_entry, const rib_ll_node_t *cur) {
 
 	// Check for IP/Subnet First:
 	if ( (in_entry->rip_msg_entry.ipaddr == cur->entry.rip_msg_entry.ipaddr) &&
@@ -88,7 +88,7 @@ static int rib_ll_node_compare(rib_entry_t *in_entry, rib_ll_node_t *cur) {
 // Evaluate in_entry against our current RIB
 // Potentially return ins_route and/or del_route as return rib_entry_t types
 // which are used to add/delete desired routes from the kernel table:
-int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
+int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
 	rib_ll_node_t *cur = head;
 	rib_ll_node_t *last = head;

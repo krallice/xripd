@@ -60,7 +60,7 @@ typedef struct xripd_rib_t {
 	struct filter_t *filter; // Pointer to our filter struct for filtering routes in/out of the RIB
 
 	// Function pointers for underlying datastore implementations:
-	int (*add_to_rib)(int*, rib_entry_t*, rib_entry_t*, rib_entry_t*);
+	int (*add_to_rib)(int*, const rib_entry_t*, rib_entry_t*, rib_entry_t*);
 	int (*remove_expired_entries)();
 	int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
 	int (*dump_rib)();
