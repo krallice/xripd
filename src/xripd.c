@@ -265,31 +265,35 @@ int destroy_xripd_settings(xripd_settings_t *xripd_settings) {
 	return 0;
 }
 
+// Shut our parent down:
+static void shutdown_process(xripd_settings_t *xripd_settings, int ret) {
+	destroy_xripd_settings(xripd_settings);
+	exit(ret);
+}
+
 int main(int argc, char **argv) {
+
 
 	// Init our settings:
 	xripd_settings_t *xripd_settings = init_xripd_settings();
 	if ( xripd_settings == NULL ) {
-		return 1;
+		shutdown_process(xripd_settings, 1);
 	}
 
 	if ( parse_args(xripd_settings, &argc, argv) != 0 ) {
-		destroy_xripd_settings(xripd_settings);
-		return 1;
+		shutdown_process(xripd_settings, 1);
 	}
 
 	// Create pipe, used for sending rip message entries from the
 	// listening daemon to the rib process:
 	if (pipe(xripd_settings->p_rib_in) == -1) {
 		fprintf(stderr, "[daemon]: Unable to create rib_in pipe\n");
-		destroy_xripd_settings(xripd_settings);
-		return 1;
+		shutdown_process(xripd_settings, 1);
 	}
 
 	// Init our RIB with a specific datastore:
 	if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_LINKEDLIST) != 0) {
-		destroy_xripd_settings(xripd_settings);
-		return 1;
+		shutdown_process(xripd_settings, 1);
 	}
 
 	// Fork:
@@ -306,8 +310,8 @@ int main(int argc, char **argv) {
 		
 		// Our listening socket for inbound RIPv2 packets:
 		if ( init_socket(xripd_settings) != 0) {
-			kill(rib_f, SIGKILL);
-			return 1;
+			kill(rib_f, SIGINT);
+			shutdown_process(xripd_settings, 1);
 		}
 
 		// Main Listening Loop
@@ -315,9 +319,8 @@ int main(int argc, char **argv) {
 
 		// SHOULD NEVER REACH:
 		// xripd_listen_loop, should never return, but if it does:
-		destroy_xripd_settings(xripd_settings);
-		kill(rib_f, SIGKILL);
-		return 1;
+		kill(rib_f, SIGINT);
+		shutdown_process(xripd_settings, 1);
 
 	// Child (xripd rib):
 	} else if (rib_f == 0) {
@@ -332,26 +335,21 @@ int main(int argc, char **argv) {
 		close(xripd_settings->p_rib_in[1]);
 
 		if ( init_netlink(xripd_settings) != 0) {
-			
-			// TODO: TELL PARENT TO CLOSE:
-			destroy_xripd_settings(xripd_settings);
-			return 1;
+			shutdown_process(xripd_settings, 1);
 		}
 		
 		// Main loop for the RIB:
 		rib_main_loop(xripd_settings);
 
 		// SHOULD NEVER REACH:
-		// TODO: TELL PARENT TO CLOSE:
-		destroy_xripd_settings(xripd_settings);
-		return 1;
+		shutdown_process(xripd_settings, 1);
 
 	// Failed to fork():
 	} else if (rib_f < 0) {
 		fprintf(stderr, "[daemon]: Failed to Fork RIB Process\n");
-		destroy_xripd_settings(xripd_settings);
-		return 1;
+		shutdown_process(xripd_settings, 1);
 	}
 
 	return 1;
+	destroy_xripd_settings(xripd_settings);
 }
