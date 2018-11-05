@@ -63,6 +63,9 @@ int append_to_filter_list(filter_t *f, uint32_t addr, uint32_t mask);
 // and return a XRIPD_FILTER_RESULT__ value
 int filter_route(filter_t *f, uint32_t addr, uint32_t mask);
 
+// Given a filename, import routes into filter_t:
+int import_filter_from_file(filter_t *f, const char *filename);
+
 void dump_filter_list(filter_t *f);
 
 #endif

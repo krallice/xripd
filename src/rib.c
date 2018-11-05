@@ -16,10 +16,22 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	// Init and Zeroise:
 	xripd_rib_t *xripd_rib = (xripd_rib_t*)malloc(sizeof(*xripd_rib));
 	memset(xripd_rib, 0, sizeof(*xripd_rib));
+	xripd_settings->xripd_rib = xripd_rib;
+
+	xripd_rib->destroy_rib = &rib_null_destroy_rib;
 
 	// Init our filter:
-	xripd_rib->filter = NULL;
-	xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_BLACKLIST);
+	if (strcmp(xripd_settings->filter_file, "") != 0) {
+		xripd_rib->filter = init_filter(xripd_settings->filter_mode);
+		if (import_filter_from_file(xripd_rib->filter, xripd_settings->filter_file) != 0) {
+			fprintf(stderr, "[rib]: Unable to load filter file. Terminating.\n");
+			return 1;
+		} else {
+			dump_filter_list(xripd_rib->filter);
+		}
+	} else {
+		xripd_rib->filter = NULL;
+	}
 	//xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_WHITELIST);
 
 	// Assign our datastore function pointers
@@ -33,8 +45,6 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->invalidate_expired_local_routes = &rib_null_invalidate_expired_local_routes;
 		xripd_rib->destroy_rib = &rib_null_destroy_rib;
 
-		xripd_settings->xripd_rib = xripd_rib;
-
 		return 0;
 	} else if ( rib_datastore == XRIPD_RIB_DATASTORE_LINKEDLIST ) {
 
@@ -43,8 +53,6 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->remove_expired_entries = &rib_ll_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_ll_invalidate_expired_local_routes;
 		xripd_rib->destroy_rib = &rib_ll_destroy_rib;
-
-		xripd_settings->xripd_rib = xripd_rib;
 
 		// We can call a function on initialisation:
 		rib_ll_init();
@@ -260,6 +268,7 @@ static void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
 	return;
 }
 
+/*
 static void rib_test_filter_init(xripd_rib_t *xripd_rib) {
 
 	uint32_t r1, r2, m1;
@@ -275,7 +284,7 @@ static void rib_test_filter_init(xripd_rib_t *xripd_rib) {
 
 	return;
 }
-
+*/
 
 // Post-fork() entry, our process enters into this function
 // This is our main execution loop
@@ -300,7 +309,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	rib_entry_t ins_route; // route to add to our kernel table (if any?)
 	rib_entry_t del_route; // route to delete from our kernel table (if any?)
 
-	rib_test_filter_init(xripd_settings->xripd_rib);
+	//rib_test_filter_init(xripd_settings->xripd_rib);
 
 	// To start with, add local routes to our RIB:
 #if XRIPD_DEBUG == 1

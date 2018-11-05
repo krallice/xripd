@@ -108,6 +108,7 @@ static xripd_settings_t *init_xripd_settings() {
 	//}	
 	
 	xripd_settings->xripd_rib = NULL;
+	xripd_settings->filter_mode = XRIPD_FILTER_MODE_BLACKLIST; // Default Value
 
 	return xripd_settings;
 }
@@ -211,11 +212,17 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 // Print usage and pass exit status on:
 static void print_usage(int ret) {
 
-	fprintf(stderr, "usage: xripd [-h] -i <interface>\n");
+	fprintf(stderr, "usage: xripd [-h] [-bw <filename>] -i <interface>\n");
 
 	fprintf(stderr, "params:\n");
        	fprintf(stderr, "\t-i <interface>\t Bind RIP daemon to network interface\n");
+       	fprintf(stderr, "\t-b\t\t Read Blacklist from <filename>\n");
+       	fprintf(stderr, "\t-w\t\t Read Whielist from <filename>\n");
        	fprintf(stderr, "\t-h\t\t Display this help message\n");
+	fprintf(stderr, "filter:\n");
+       	fprintf(stderr, "\t - filter file may contain zero or more routes to be white/blacklisted from the RIB\n");
+       	fprintf(stderr, "\t - 1 route per line in file, in the format of x.x.x.x y.y.y.y\n");
+	fprintf(stderr, "\n");
 	exit(ret);
 }
 
@@ -225,13 +232,18 @@ static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) 
 	int option_index = 0;
 	int index_count = 0;
 
-	char *iface_name = NULL;
-
-	while ((option_index = getopt(*argc, argv, "i:")) != -1) {
+	while ((option_index = getopt(*argc, argv, "i:b:w:")) != -1) {
 		switch(option_index) {
 			case 'i':
-				iface_name = optarg;
-				strcpy(xripd_settings->iface_name, iface_name);
+				strcpy(xripd_settings->iface_name, optarg);
+				break;
+			case 'b':
+				xripd_settings->filter_mode = XRIPD_FILTER_MODE_BLACKLIST;
+				strcpy(xripd_settings->filter_file, optarg);
+				break;
+			case 'w':
+				xripd_settings->filter_mode = XRIPD_FILTER_MODE_WHITELIST;
+				strcpy(xripd_settings->filter_file, optarg);
 				break;
 			default:
 				print_usage(0);
