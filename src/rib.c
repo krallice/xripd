@@ -16,9 +16,22 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	// Init and Zeroise:
 	xripd_rib_t *xripd_rib = (xripd_rib_t*)malloc(sizeof(*xripd_rib));
 	memset(xripd_rib, 0, sizeof(*xripd_rib));
+	xripd_settings->xripd_rib = xripd_rib;
+
+	xripd_rib->destroy_rib = &rib_null_destroy_rib;
 
 	// Init our filter:
-	xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_BLACKLIST);
+	if (strcmp(xripd_settings->filter_file, "") != 0) {
+		xripd_rib->filter = init_filter(xripd_settings->filter_mode);
+		if (import_filter_from_file(xripd_rib->filter, xripd_settings->filter_file) != 0) {
+			fprintf(stderr, "[rib]: Unable to load filter file. Terminating.\n");
+			return 1;
+		} else {
+			dump_filter_list(xripd_rib->filter);
+		}
+	} else {
+		xripd_rib->filter = NULL;
+	}
 	//xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_WHITELIST);
 
 	// Assign our datastore function pointers
@@ -30,7 +43,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->dump_rib = &rib_null_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_null_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_null_invalidate_expired_local_routes;
-		xripd_settings->xripd_rib = xripd_rib;
+		xripd_rib->destroy_rib = &rib_null_destroy_rib;
 
 		return 0;
 	} else if ( rib_datastore == XRIPD_RIB_DATASTORE_LINKEDLIST ) {
@@ -39,7 +52,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->dump_rib = &rib_ll_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_ll_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_ll_invalidate_expired_local_routes;
-		xripd_settings->xripd_rib = xripd_rib;
+		xripd_rib->destroy_rib = &rib_ll_destroy_rib;
 
 		// We can call a function on initialisation:
 		rib_ll_init();
@@ -50,8 +63,24 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	return 1;
 }
 
+void destroy_rib(xripd_settings_t *xripd_settings) {
+
+	// Destroy filter struct:
+	if ( xripd_settings->xripd_rib->filter != NULL ) {
+		destroy_filter(xripd_settings->xripd_rib->filter);
+	}
+	
+	// Destroy our rib datastore:
+	(*xripd_settings->xripd_rib->destroy_rib)();
+
+	// Finally, free ourselves:
+	free(xripd_settings->xripd_rib);
+
+	return;
+}
+
 // Debug function to print the route recieved via the rib process:
-void rib_route_print(rib_entry_t *in_entry) {
+static void rib_route_print(const rib_entry_t *in_entry) {
 
 	char ipaddr[16];
 	char subnet[16];
@@ -72,7 +101,7 @@ void rib_route_print(rib_entry_t *in_entry) {
 //	Depending on value of add_rib_ret, 
 //	Optional: ins_route will contain rib_entry_t for route to be installed into kernel's table
 // 	Optional: del_route will contain rib_entry_t for route to be deleted from the kernel's table
-void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
+static void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
 	// Pass argument pointers straight through to the add_to_rib function:
 	(*xripd_settings->xripd_rib->add_to_rib)(add_rib_ret, in_entry, ins_route, del_route);
@@ -139,7 +168,7 @@ void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, rib_en
 
 // Function called on each successive iteration of route returned from kernel via netlink.
 // Parses the netlink message, converts to a rib_entry_t struct, and passes control to the add_entry_to_rib function (above)
-int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr) {
+int add_local_route_to_rib(xripd_settings_t *xripd_settings, const struct nlmsghdr *nlhdr) {
 
 	// Pointer to our rtmsg. Each rtmsg may contain multiple attributes:
 	struct rtmsg *route_entry;
@@ -217,7 +246,7 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nl
 
 // Scan through our local routes, and find anything in our RIB that no longer matches 
 // local routes. If that's the case, invalidate our routes in the RIB as required
-void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
+static void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
 
 	// Set our last_local_poll_time to the current time:
 	(*xripd_settings->xripd_rib).last_local_poll = time(NULL);
@@ -239,7 +268,8 @@ void refresh_local_routes_into_rib(xripd_settings_t *xripd_settings) {
 	return;
 }
 
-void rib_test_filter_init(xripd_rib_t *xripd_rib) {
+/*
+static void rib_test_filter_init(xripd_rib_t *xripd_rib) {
 
 	uint32_t r1, r2, m1;
 
@@ -254,7 +284,7 @@ void rib_test_filter_init(xripd_rib_t *xripd_rib) {
 
 	return;
 }
-
+*/
 
 // Post-fork() entry, our process enters into this function
 // This is our main execution loop
@@ -279,7 +309,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	rib_entry_t ins_route; // route to add to our kernel table (if any?)
 	rib_entry_t del_route; // route to delete from our kernel table (if any?)
 
-	rib_test_filter_init(xripd_settings->xripd_rib);
+	//rib_test_filter_init(xripd_settings->xripd_rib);
 
 	// To start with, add local routes to our RIB:
 #if XRIPD_DEBUG == 1

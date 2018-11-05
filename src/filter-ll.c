@@ -14,7 +14,7 @@ filter_list_t *init_filter_list(void) {
 }
 
 // Destroy the filter_list_t struct:
-void destroy_filter_list(filter_list_t *fl) {
+static void destroy_filter_list(filter_list_t *fl) {
 
 	// Todo: code to traverse the filter nodes
 	
@@ -49,7 +49,7 @@ filter_t *init_filter(uint8_t mode) {
 }
 
 // Create a brand new node:
-filter_node_t *init_filter_node(uint32_t addr, uint32_t mask) {
+static filter_node_t *init_filter_node(uint32_t addr, uint32_t mask) {
 
 	// Init and zeroise:
 	filter_node_t *n = (filter_node_t*)malloc(sizeof(*n));
@@ -196,7 +196,6 @@ static int filter_route_whitelist(filter_t *f, uint32_t *addr, uint32_t *mask) {
 	return XRIPD_FILTER_RESULT_DENY;
 }
 
-
 // Run our route past our filter
 // This is a simple conditional function call
 // depending on which 'mode' the filter is running in:
@@ -213,4 +212,66 @@ int filter_route(filter_t *f, uint32_t addr, uint32_t mask) {
 	}
 
 	return res;
+}
+
+// Import filter from filename:
+int import_filter_from_file(filter_t *f, const char *filename) {
+
+	FILE *fp;
+	char *line = NULL;
+	size_t len = 0;
+	size_t read = 0;
+
+	uint32_t uaddr = 0;
+	uint32_t umask = 0;
+
+	// Open file or bomb out:
+	fp = fopen(filename, "r");
+	if (fp == NULL) {
+		fprintf(stderr, "[filter]: No file found by name %s\n", filename);
+		return 1;
+	}
+	
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[filter]: Loading filter from filter file: %s\n", filename);
+#endif
+	// Read each line:
+	while ((read = getline(&line, &len, fp)) != -1) {
+		char *token;
+		// token = address
+		token = strtok(line, " ");
+		while (token != NULL) {
+
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[filter]: Filter Rule Address: %s\n", token);
+#endif
+			inet_pton(AF_INET, token, &uaddr);
+
+			// token == subnet?
+			token = strtok(NULL, " \n");
+			if ( token != NULL ) {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "[filter]: Filter Rule Mask: %s\n", token);
+				
+#endif
+				// If we get to here, we are good to create a filter list:
+				inet_pton(AF_INET, token, &umask);
+				append_to_filter_list(f, uaddr, umask);
+
+				// Loop (token = NULL):
+				token = strtok(NULL, " ");
+			} else {
+				fprintf(stderr, "[filter]: Error with filter file format.\n");
+				fclose(fp);
+				return 1;
+			}
+		}
+	}
+
+	fclose(fp);
+	if (line) {
+		free(line);
+	}
+
+	return 0;
 }

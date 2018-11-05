@@ -9,6 +9,11 @@
 #define LL_CMP_INFINITY_MATCH 0x05
 
 // Wrap the rib_entry_t data into a singularly linked list struct:
+// 
+//  +-+-+-+-+-+-+-+-+-+-+       +-+-+-+-+-+-+-+-+-+-+
+//  | rib_entry | *next | --->  | rib_entry | *next |
+//  +-+-+-+-+-+-+-+-+-+-+       +-+-+-+-+-+-+-+-+-+-+
+
 typedef struct rib_ll_node_t {
 	rib_entry_t entry;
 	struct rib_ll_node_t *next;
@@ -25,7 +30,7 @@ int rib_ll_init() {
 
 // Responsible for the creation of a brand new rib_ll_node
 // Join onto the end of the *last node:
-int rib_ll_new_node(rib_ll_node_t *new, rib_entry_t *in_entry, rib_ll_node_t *last) {
+static int rib_ll_new_node(rib_ll_node_t *new, const rib_entry_t *in_entry, rib_ll_node_t *last) {
 
 	new = (rib_ll_node_t*)malloc(sizeof(rib_ll_node_t));
 	memset(new, 0, sizeof(rib_ll_node_t));
@@ -39,7 +44,20 @@ int rib_ll_new_node(rib_ll_node_t *new, rib_entry_t *in_entry, rib_ll_node_t *la
 	return 0;
 }
 
-int rib_ll_node_compare(rib_entry_t *in_entry, rib_ll_node_t *cur) {
+void rib_ll_destroy_rib() { 
+
+	rib_ll_node_t *cur = head;
+	rib_ll_node_t *next = cur->next;
+
+	// Iterate over linked list:
+	while ( cur != NULL ) {
+		free(cur);
+		cur = next;
+		next = cur->next;
+	}
+}
+
+static int rib_ll_node_compare(const rib_entry_t *in_entry, const rib_ll_node_t *cur) {
 
 	// Check for IP/Subnet First:
 	if ( (in_entry->rip_msg_entry.ipaddr == cur->entry.rip_msg_entry.ipaddr) &&
@@ -83,7 +101,7 @@ int rib_ll_node_compare(rib_entry_t *in_entry, rib_ll_node_t *cur) {
 // Evaluate in_entry against our current RIB
 // Potentially return ins_route and/or del_route as return rib_entry_t types
 // which are used to add/delete desired routes from the kernel table:
-int rib_ll_add_to_rib(int *route_ret, rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
+int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
 	rib_ll_node_t *cur = head;
 	rib_ll_node_t *last = head;

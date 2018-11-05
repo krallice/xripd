@@ -4,7 +4,7 @@
 
 // Given an interface name string, find and set our interface number (as indexed by the kernel).
 // Populate our xripd_settings_t struct with this index value
-int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
+static int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 
 	// Attempt to find interface index number of xripd_settings->iface_name
 	// If successful, interface index in ifrq->ifr_ifindex:
@@ -18,7 +18,7 @@ int get_iface_index(xripd_settings_t *xripd_settings, struct ifreq *ifrq) {
 }
 
 // Create our AF_INET SOCK_DGRAM listening socket:
-int init_socket(xripd_settings_t *xripd_settings) {
+static int init_socket(xripd_settings_t *xripd_settings) {
 
 	// Interface Request:
 	struct ifreq ifrq;
@@ -93,26 +93,29 @@ int init_socket(xripd_settings_t *xripd_settings) {
 }
 
 // Initialise our xripd_settings_t struct:
-xripd_settings_t *init_xripd_settings() {
+static xripd_settings_t *init_xripd_settings() {
 
 	// Init and Zeroise:
 	xripd_settings_t *xripd_settings = (xripd_settings_t*)malloc(sizeof(xripd_settings_t));
 	memset(xripd_settings, 0, sizeof(xripd_settings_t));
 
 	// Check interface string length, and copy if safe:
-	if ( strlen(XRIPD_PASSIVE_IFACE) <= IFNAMSIZ ) {
-		strcpy(xripd_settings->iface_name, XRIPD_PASSIVE_IFACE);
-	} else {
-		fprintf(stderr, "[daemon] Error, Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
-		return NULL;
-	}	
+	//if ( strlen(XRIPD_PASSIVE_IFACE) <= IFNAMSIZ ) {
+		//strcpy(xripd_settings->iface_name, XRIPD_PASSIVE_IFACE);
+	//} else {
+		//fprintf(stderr, "[daemon] Error, Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
+		//return NULL;
+	//}	
+	
+	xripd_settings->xripd_rib = NULL;
+	xripd_settings->filter_mode = XRIPD_FILTER_MODE_BLACKLIST; // Default Value
 
 	return xripd_settings;
 }
 
 // Encapsulate the raw rip_msg_entry_t from the datagram into a
 // rib_entry_t, and send to the rib process via the p_rib_in anon pipe:
-int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
+static int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, struct sockaddr_in recv_from) {
 
 	// Create our rib_entry:
 	rib_entry_t entry;
@@ -137,7 +140,7 @@ int send_to_rib(xripd_settings_t *xripd_settings, rip_msg_entry_t *rip_entry, st
 }
 
 // Listen on our DGRAM socket, and parse messages recieved:
-int xripd_listen_loop(xripd_settings_t *xripd_settings) {
+static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 
 	int len = 0;
 	char receive_buffer[RIP_DATAGRAM_SIZE];
@@ -206,29 +209,111 @@ int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 	return 0;
 }
 
+// Print usage and pass exit status on:
+static void print_usage(int ret) {
+
+	fprintf(stderr, "usage: xripd [-h] [-bw <filename>] -i <interface>\n");
+
+	fprintf(stderr, "params:\n");
+       	fprintf(stderr, "\t-i <interface>\t Bind RIP daemon to network interface\n");
+       	fprintf(stderr, "\t-b\t\t Read Blacklist from <filename>\n");
+       	fprintf(stderr, "\t-w\t\t Read Whielist from <filename>\n");
+       	fprintf(stderr, "\t-h\t\t Display this help message\n");
+	fprintf(stderr, "filter:\n");
+       	fprintf(stderr, "\t - filter file may contain zero or more routes to be white/blacklisted from the RIB\n");
+       	fprintf(stderr, "\t - 1 route per line in file, in the format of x.x.x.x y.y.y.y\n");
+	fprintf(stderr, "\n");
+	exit(ret);
+}
+
+// Function to parse command line arguments
+static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) {
+
+	int option_index = 0;
+	int index_count = 0;
+
+	while ((option_index = getopt(*argc, argv, "i:b:w:h")) != -1) {
+		switch(option_index) {
+			case 'i':
+				strcpy(xripd_settings->iface_name, optarg);
+				break;
+			case 'b':
+				xripd_settings->filter_mode = XRIPD_FILTER_MODE_BLACKLIST;
+				strcpy(xripd_settings->filter_file, optarg);
+				break;
+			case 'w':
+				xripd_settings->filter_mode = XRIPD_FILTER_MODE_WHITELIST;
+				strcpy(xripd_settings->filter_file, optarg);
+				break;
+			case 'h':
+				print_usage(0);
+			default:
+				print_usage(0);
+		}
+		index_count++;
+	}
+
+	// No arguments were given, print usage to help the user
+	// and bomb out:
+	if (index_count == 0) {
+		print_usage(1);
+
+	}
+
+	return 0;
+}
+
+int destroy_xripd_settings(xripd_settings_t *xripd_settings) {
+
+	if ( xripd_settings != NULL ) {
+		if ( xripd_settings->xripd_rib != NULL ) {
+			destroy_rib(xripd_settings);
+		}
+
+		close(xripd_settings->p_rib_in[0]);
+		close(xripd_settings->p_rib_in[1]);
+
+		free(xripd_settings);
+	}
+	return 0;
+}
+
+// Shut our parent down:
+static void shutdown_process(xripd_settings_t *xripd_settings, int ret) {
+	destroy_xripd_settings(xripd_settings);
+	exit(ret);
+}
+
 int main(int argc, char **argv) {
+
 
 	// Init our settings:
 	xripd_settings_t *xripd_settings = init_xripd_settings();
 	if ( xripd_settings == NULL ) {
-		return 1;
+		shutdown_process(xripd_settings, 1);
+	}
+
+	if ( parse_args(xripd_settings, &argc, argv) != 0 ) {
+		shutdown_process(xripd_settings, 1);
 	}
 
 	// Create pipe, used for sending rip message entries from the
 	// listening daemon to the rib process:
 	if (pipe(xripd_settings->p_rib_in) == -1) {
 		fprintf(stderr, "[daemon]: Unable to create rib_in pipe\n");
-		return 1;
+		shutdown_process(xripd_settings, 1);
 	}
 
 	// Init our RIB with a specific datastore:
-	if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_LINKEDLIST) != 0)
-		return 1;
+	if ( init_rib(xripd_settings, XRIPD_RIB_DATASTORE_LINKEDLIST) != 0) {
+		shutdown_process(xripd_settings, 1);
+	}
 
-	pid_t f = fork();
+	// Fork:
+	pid_t rib_f = fork();
 
 	// Parent (xripd listener):
-	if (f > 0) {
+	if (rib_f > 0) {
 
 		char proc_name[] = "xripd-daemon";
 		strncpy(argv[0], proc_name, sizeof(proc_name));
@@ -238,18 +323,20 @@ int main(int argc, char **argv) {
 		
 		// Our listening socket for inbound RIPv2 packets:
 		if ( init_socket(xripd_settings) != 0) {
-			kill(f, SIGKILL);
-			return 1;
+			kill(rib_f, SIGINT);
+			shutdown_process(xripd_settings, 1);
 		}
 
 		// Main Listening Loop
 		xripd_listen_loop(xripd_settings);
 
-		kill(f, SIGKILL);
-		return 1;
+		// SHOULD NEVER REACH:
+		// xripd_listen_loop, should never return, but if it does:
+		kill(rib_f, SIGINT);
+		shutdown_process(xripd_settings, 1);
 
 	// Child (xripd rib):
-	} else if (f == 0) {
+	} else if (rib_f == 0) {
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "[rib]: RIB Process Started\n");
 #endif
@@ -261,15 +348,21 @@ int main(int argc, char **argv) {
 		close(xripd_settings->p_rib_in[1]);
 
 		if ( init_netlink(xripd_settings) != 0) {
-			return 1;
+			shutdown_process(xripd_settings, 1);
 		}
+		
+		// Main loop for the RIB:
 		rib_main_loop(xripd_settings);
 
-		return 0;
+		// SHOULD NEVER REACH:
+		shutdown_process(xripd_settings, 1);
 
 	// Failed to fork():
-	} else if (f < 0) {
+	} else if (rib_f < 0) {
 		fprintf(stderr, "[daemon]: Failed to Fork RIB Process\n");
-		return 1;
+		shutdown_process(xripd_settings, 1);
 	}
+
+	return 1;
+	destroy_xripd_settings(xripd_settings);
 }

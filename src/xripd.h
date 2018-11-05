@@ -11,6 +11,8 @@
 #include <signal.h>
 #include <time.h>
 
+#include <getopt.h>
+
 // Network Specific:
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -48,12 +50,18 @@
 
 // Daemon Settings Structure:
 typedef struct xripd_settings_t {
-	int sd; 			// Socket Descriptor (for inbound RIP Packets)
-	int nlsd;			// Netlink Socket Descriptor (for route table manipulation)
+	// Sockets:
+	uint8_t sd; 			// Socket Descriptor (for inbound RIP Packets)
+	uint8_t nlsd;			// Netlink Socket Descriptor (for route table manipulation)
+	// Interfaces:
 	char iface_name[IFNAMSIZ]; 	// Human String for an interface, ie. "eth3" or "enp0s3"
-	int iface_index; 		// Kernel index id for interface
+	uint8_t iface_index; 		// Kernel index id for interface
+	// RIB:
 	struct xripd_rib_t *xripd_rib;		// Pointer to RIB
 	int p_rib_in[2];		// Pipe for Listener -> RIB
+	// Filter:
+	char filter_file[64];		// Filename for the filterfile
+	uint8_t filter_mode;		// Whitelist or Blacklist?
 } xripd_settings_t;
 
 // https://tools.ietf.org/html/rfc2453

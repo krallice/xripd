@@ -52,7 +52,7 @@ int del_netlink(xripd_settings_t *xripd_settings) {
 }
 
 // This is the utility function for adding the parameters to the packet. 
-int addattr_l(struct nlmsghdr *n, int maxlen, int type, void *data, int alen) { 
+static int addattr_l(struct nlmsghdr *n, int maxlen, int type, void *data, int alen) { 
 
 	int len = RTA_LENGTH(alen); 
 	struct rtattr *rta; 
@@ -97,7 +97,7 @@ uint32_t cidr_to_netmask_netorder(int cidr) {
 
 // Given a reference to req, prepare the netlink header
 // nlmsg_type (ex. RTM_NEWROUTE) must be provided
-void prepare_req_nlhdr_rtm(req_t *req, int nlmsg_type, rib_entry_t *entry, int replace_flag) {
+static void prepare_req_nlhdr_rtm(req_t *req, int nlmsg_type, rib_entry_t *entry, int replace_flag) {
 
 	// Format our Netlink header:
 	// Datagram orientated REQUEST message, and request to CREATE a new object:
@@ -131,7 +131,7 @@ void prepare_req_nlhdr_rtm(req_t *req, int nlmsg_type, rib_entry_t *entry, int r
 }
 
 // Prepare the RTAs for a RTM_NEWROUTE message:
-void prepare_req_rtm_newroute_rtas(req_t *req, xripd_settings_t *xripd_settings, rib_entry_t *entry) {
+static void prepare_req_rtm_newroute_rtas(req_t *req, xripd_settings_t *xripd_settings, rib_entry_t *entry) {
 	
 	// Attribute Variables:
 	int index = 0;
@@ -149,7 +149,7 @@ void prepare_req_rtm_newroute_rtas(req_t *req, xripd_settings_t *xripd_settings,
 }
 
 // Format and prepare msghdr (which is used in the sendmsg abi):
-void prepare_msghdr(struct msghdr *rtnl_msghdr, struct iovec *io_vec, struct req_t *req, struct sockaddr_nl *kernel_address) {
+static void prepare_msghdr(struct msghdr *rtnl_msghdr, struct iovec *io_vec, struct req_t *req, struct sockaddr_nl *kernel_address) {
 
 	// Address of our destination (the kernel):
 	kernel_address->nl_family = AF_NETLINK;
@@ -307,7 +307,7 @@ int netlink_replace_new_route(xripd_settings_t *xripd_settings, rib_entry_t *ins
 	return 0;
 }
 
-void dump_rtm_newroute(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr) {
+static void dump_rtm_newroute(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr) {
 
 	// Each Netlink datagram may contain 1+ route_attributes, followed by route data
 	//

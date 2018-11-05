@@ -60,10 +60,11 @@ typedef struct xripd_rib_t {
 	struct filter_t *filter; // Pointer to our filter struct for filtering routes in/out of the RIB
 
 	// Function pointers for underlying datastore implementations:
-	int (*add_to_rib)(int*, rib_entry_t*, rib_entry_t*, rib_entry_t*);
+	int (*add_to_rib)(int*, const rib_entry_t*, rib_entry_t*, rib_entry_t*);
 	int (*remove_expired_entries)();
 	int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
 	int (*dump_rib)();
+	void (*destroy_rib)();
 
 } xripd_rib_t;
 
@@ -78,5 +79,8 @@ void rib_main_loop(xripd_settings_t *xripd_settings);
 void copy_rib_entry(rib_entry_t *src, rib_entry_t *dst);
 
 // Add a local route pointed to by nlmsghdr to the local rib:
-int add_local_route_to_rib(xripd_settings_t *xripd_settings, struct nlmsghdr *nlhdr);
+int add_local_route_to_rib(xripd_settings_t *xripd_settings, const struct nlmsghdr *nlhdr);
+
+// Destroy RIB completely
+void destroy_rib(xripd_settings_t *xripd_settings);
 #endif
