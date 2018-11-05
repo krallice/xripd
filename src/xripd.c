@@ -232,7 +232,7 @@ static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) 
 	int option_index = 0;
 	int index_count = 0;
 
-	while ((option_index = getopt(*argc, argv, "i:b:w:")) != -1) {
+	while ((option_index = getopt(*argc, argv, "i:b:w:h")) != -1) {
 		switch(option_index) {
 			case 'i':
 				strcpy(xripd_settings->iface_name, optarg);
@@ -245,9 +245,10 @@ static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) 
 				xripd_settings->filter_mode = XRIPD_FILTER_MODE_WHITELIST;
 				strcpy(xripd_settings->filter_file, optarg);
 				break;
+			case 'h':
+				print_usage(0);
 			default:
 				print_usage(0);
-				return 1;
 		}
 		index_count++;
 	}
