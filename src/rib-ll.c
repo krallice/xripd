@@ -165,11 +165,17 @@ int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *
 						fprintf(stderr, "[l-list]: Node:%p Better route, INSTALLING.\n", cur);
 #endif
 						// Better metric, let's replace existing rib entry:
+						// Edge case, if metric is INFINITY, then technically we need to add a new route, not replace
+						if (ntohl(cur->entry.rip_msg_entry.metric) == RIP_METRIC_INFINITY) {
+							*route_ret = RIB_RET_INSTALL_NEW;
+						} else {
+							*route_ret = RIB_RET_REPLACE;
+						}
+
 						memcpy(&(cur->entry), in_entry, sizeof(rib_entry_t));
 
 						// Return ins_route as our route to replace:
 						memcpy(ins_route, in_entry, sizeof(rib_entry_t));
-						*route_ret = RIB_RET_REPLACE;
 						return 0;
 				}
 			}
