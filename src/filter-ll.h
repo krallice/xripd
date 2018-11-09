@@ -28,6 +28,7 @@
 // Whitelist or Blacklist filter operation, and default value:
 #define XRIPD_FILTER_MODE_WHITELIST 0x00
 #define XRIPD_FILTER_MODE_BLACKLIST 0x01
+#define XRIPD_FILTER_MODE_NULL 0x02
 
 #define XRIPD_FILTER_RESULT_DENY 0x00
 #define XRIPD_FILTER_RESULT_ALLOW 0x01
