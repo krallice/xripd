@@ -21,16 +21,18 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	xripd_rib->destroy_rib = &rib_null_destroy_rib;
 
 	// Init our filter:
-	if (strcmp(xripd_settings->filter_file, "") != 0) {
-		xripd_rib->filter = init_filter(xripd_settings->filter_mode);
-		if (import_filter_from_file(xripd_rib->filter, xripd_settings->filter_file) != 0) {
-			fprintf(stderr, "[rib]: Unable to load filter file. Terminating.\n");
-			return 1;
+	if (xripd_settings->filter_mode != XRIPD_FILTER_MODE_NULL ) {
+		if (strcmp(xripd_settings->filter_file, "") != 0) {
+			xripd_rib->filter = init_filter(xripd_settings->filter_mode);
+			if (import_filter_from_file(xripd_rib->filter, xripd_settings->filter_file) != 0) {
+				fprintf(stderr, "[rib]: Unable to load filter file. Terminating.\n");
+				return 1;
+			} else {
+				dump_filter_list(xripd_rib->filter);
+			}
 		} else {
-			dump_filter_list(xripd_rib->filter);
+			xripd_rib->filter = NULL;
 		}
-	} else {
-		xripd_rib->filter = NULL;
 	}
 	//xripd_rib->filter = init_filter(XRIPD_FILTER_MODE_WHITELIST);
 
@@ -365,10 +367,16 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 				rib_route_print(&in_entry);
 #endif
 
-				// Pass route through filter, and if success, proceed with adding to rib/kernel:
-				if ( filter_route(xripd_settings->xripd_rib->filter,in_entry.rip_msg_entry.ipaddr, in_entry.rip_msg_entry.subnet) == XRIPD_FILTER_RESULT_ALLOW ) {
-				// Compare in_entry to existing rib & add/delete from kernel if required:
-				add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
+				// If filter exists:
+				if ( xripd_settings->filter_mode != XRIPD_FILTER_MODE_NULL ) {
+					// Pass route through filter, and if success, proceed with adding to rib/kernel:
+					if ( filter_route(xripd_settings->xripd_rib->filter, in_entry.rip_msg_entry.ipaddr, 
+						in_entry.rip_msg_entry.subnet) == XRIPD_FILTER_RESULT_ALLOW ) {
+						add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
+					}
+				} else {
+					// Don't worry about filter, process straight through our rib:
+					add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
 				}
 
 			// Select Timeout triggered, break out of loop:

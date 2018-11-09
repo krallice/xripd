@@ -108,7 +108,7 @@ static xripd_settings_t *init_xripd_settings() {
 	//}	
 	
 	xripd_settings->xripd_rib = NULL;
-	xripd_settings->filter_mode = XRIPD_FILTER_MODE_BLACKLIST; // Default Value
+	xripd_settings->filter_mode = XRIPD_FILTER_MODE_NULL; // Default Value
 
 	return xripd_settings;
 }
