@@ -58,7 +58,7 @@ network +--------> AF_INET SOCKET+--------> xripd daemon |
                      +-----+         |    +---+----------+
                                      |        |
                                      |        |
-  ROUTING        +---------------+  sendmsg() |
+  ROUTING        +---------------+  sendmsg() |  NLM_F_REQUEST
    TABLE <-------+ NETLINK SOCKET<---+--------+
                  +---------------+   |
                                      +
