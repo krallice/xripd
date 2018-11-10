@@ -1,0 +1,22 @@
+                               rip_msg_entry_t
+                                recv_from()
+RIPv2 UPDATE MSG +---------------+   |    +--------------+
+network +--------> AF_INET SOCKET+--------> xripd daemon |
+                 +---------------+   |    +---+--+-------+
+                                     |        |  |
+                                     |        |  |
+                     +-----+      write()     |  | rib_entry_t
+                     |     <---------+-----------+
+                     | a p |         |        |
+                     | n i |         |        | fork()
+                     | o p |         |        |
+                     | n e |      read()  +---v----------+
+                     |     +---------+---->  xripd rib   |
+                     +-----+         |    +---+----------+
+                                     |        |
+                                     |        |
+  ROUTING        +---------------+  sendmsg() |  NLM_F_REQUEST
+   TABLE <-------+ NETLINK SOCKET<---+--------+
+                 +---------------+   |
+                                     +
+                     kernel space        user space
