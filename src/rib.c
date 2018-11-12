@@ -311,6 +311,10 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	rib_entry_t ins_route; // route to add to our kernel table (if any?)
 	rib_entry_t del_route; // route to delete from our kernel table (if any?)
 
+	// Spawn our rib_out thread:
+	pthread_t ribout_thread;
+	pthread_create(&ribout_thread, NULL, &rib_out_spawn, NULL);
+
 	//rib_test_filter_init(xripd_settings->xripd_rib);
 
 	// To start with, add local routes to our RIB:

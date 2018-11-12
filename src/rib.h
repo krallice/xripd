@@ -2,6 +2,7 @@
 #define XRIPD_RIB_H
 
 #include "xripd.h"
+#include "rib-out.h"
 #include "filter-ll.h"
 
 // Standard Includes:
@@ -23,6 +24,8 @@
 
 // Select():
 #include <sys/select.h>
+
+#include <pthread.h>
 
 // Datastore implementation indexes
 // uint8_t value, 256 possible datastores:
