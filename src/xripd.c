@@ -1,4 +1,5 @@
 #include "xripd.h"
+#include "xripd-out.h"
 #include "rib.h"
 #include "route.h"
 
@@ -326,6 +327,12 @@ int main(int argc, char **argv) {
 			kill(rib_f, SIGINT);
 			shutdown_process(xripd_settings, 1);
 		}
+
+		// Spawn our secondary thread that:
+		// 	+ Listens on an Abstract Unix Domain Socket 
+		// 	+ Is responsible for sending RIPv2 Messages on the wire
+		pthread_t xripd_out_thread;
+		pthread_create(&xripd_out_thread, NULL, &xripd_out_spawn, NULL);
 
 		// Main Listening Loop
 		xripd_listen_loop(xripd_settings);

@@ -22,6 +22,8 @@
 #include <linux/if_arp.h>
 #include <arpa/inet.h>
 
+#include <pthread.h>
+
 // XRIPD Defines:
 #define XRIPD_PASSIVE_IFACE "enp0s8"
 #define XRIPD_DEBUG 0x01

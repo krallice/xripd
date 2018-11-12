@@ -29,6 +29,6 @@
 #include <sys/select.h>
 #include <pthread.h>
 
-void *rib_out_spawn(void *arg);
+void *xripd_out_spawn(void *arg);
 
 #endif

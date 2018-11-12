@@ -25,7 +25,7 @@ static int init_abstract_unix_socket(sun_addresses_t *s) {
 	}
 
 #if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib-out]: Binding to Abstract UNIX Domain Socket: \\0xripd.\n");
+	fprintf(stderr, "[rib-out]: Binding to Abstract UNIX Domain Socket: \\0xripd-rib.\n");
 #endif
 	if ( bind(s->socketfd, (struct sockaddr *) &(s->sockaddr_un_rib), sizeof(struct sockaddr_un)) < 0 ) {
 		goto failed_bind;
@@ -33,19 +33,8 @@ static int init_abstract_unix_socket(sun_addresses_t *s) {
 
 	// Successful exit:
 #if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib-out]: Successfully bound to Abstract UNIX Domain Socket: \\0xripd.\n");
+	fprintf(stderr, "[rib-out]: Successfully bound to Abstract UNIX Domain Socket: \\0xripd-rib.\n");
 #endif
-
-	int sender = 77;
-	int ret = 0;
-
-	while (1) {
-		fprintf(stderr, "[rib-out]: SENDING BYTES\n");
-		ret = sendto(s->socketfd, &sender, sizeof(sender), 0, (struct sockaddr *) &(s->sockaddr_un_daemon), sizeof(struct sockaddr_un));
-		fprintf(stderr, "[rib-out]: SENT %d bytes\n", ret);
-		sleep(1);
-	}
-
 	return 0;
 
 failed_bind:
@@ -57,6 +46,8 @@ failed_socket_init:
 
 void *rib_out_spawn(void *arg) {
 
+	char buf[8192];
+
 	// Initialse our addresses struct on the stack:
 	sun_addresses_t sun_addresses;
 	memset(&sun_addresses, 0, sizeof(sun_addresses));
@@ -65,20 +56,28 @@ void *rib_out_spawn(void *arg) {
 
 	// Create our abstract UNIX Domain Socket:
 	if ( init_abstract_unix_socket(&sun_addresses) != 0 ) {
-		fprintf(stderr, "[rib-out]: Failed to bind to Abstract UNIX Domain Socket: \\0xripd.\n");
+		fprintf(stderr, "[rib-out]: Failed to bind to Abstract UNIX Domain Socket: \\0xripd-rib.\n");
 		fprintf(stderr, "[rib-out]: Killing Thread.\n");
 		goto failed_socket;
 	}
 
+	int len = 0;
+	struct rib_ctl_hdr_t rib_control_header;
+
 	while (1) {
-#if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib-out]: OUT-THREAD\n");
-#endif
-	
-	//int n = send(socket, msg, strlen(msg), 0, (struct sockaddr *)&
-
-
-		sleep(1);
+		len = read(sun_addresses.socketfd, buf, sizeof(buf));
+		fprintf(stderr, "[rib-out]: Recieved %d Bytes.\n", len);
+		// Cast our raw recieved bytes to retrieve our header:
+		rib_control_header = *(rib_ctl_hdr_t *)buf;
+		fprintf(stderr, "[rib-out]: Received: %d Bytes.\n", len);
+		if ( rib_control_header.version != RIB_CTL_HDR_VERSION_1 ) {
+			fprintf(stderr, "[rib-out]: Received Unsupported Version.\n");
+			break;
+		}
+		if ( rib_control_header.msgtype == RIB_CTL_HDR_MSGTYPE_REQUEST ) {
+			fprintf(stderr, "[rib-out]: Received RIB_CTRL_MSGTYPE_REQUEST!\n");
+			fprintf(stderr, "[rib-out]: Time to dump RIB.\n");
+		}
 	}
 
 failed_socket:
