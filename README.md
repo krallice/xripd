@@ -39,30 +39,31 @@ I also wanted to build something moderately useful where I could muck around and
 	void (*destroy_rib)();
 ```
 ## Structure:
-
 ```
-                               rip_msg_entry_t
-                                recv_from()
-RIPv2 UPDATE MSG +---------------+   |    +--------------+
-network +--------> AF_INET SOCKET+--------> xripd daemon |
-                 +---------------+   |    +---+--+-------+
-                                     |        |  |
-                                     |        |  |
-                     +-----+      write()     |  | rib_entry_t
-                     |     <---------+-----------+
-                     | a p |         |        |
-                     | n i |         |        | fork()
-                     | o p |         |        |
-                     | n e |      read()  +---v----------+
-                     |     +---------+---->  xripd rib   |
-                     +-----+         |    +---+----------+
-                                     |        |
-                                     |        |
-  ROUTING        +---------------+  sendmsg() |  NLM_F_REQUEST
-   TABLE <-------+ NETLINK SOCKET<---+--------+
-                 +---------------+   |
-                                     +
-                     kernel space        user space
+                        +---------------------------------------+
+       <------------+   |      rip_msg_entry_t                  |       rib_entry_t
+                    |   |       recv_from()                     |      recvfrom()
+RIP^2 UPDATE MSG +--+---v--------+   +    +--------------+------+-----+     +  +--------+
+network +--------> AF_INET SOCKET+--------> xripd daemon | daemon pthread------> AF_UNIX|
+                 +---------------+   |    +---+--+-------+------------+     |  +-+----^-+
+                                     |        |  |                          |    |    |
+                                     +        |  |                          |    |    | ABSTRACT
+                     +-----+      write()     |  | rib_entry_t              |    |    | UNIX
+                     |     <---------+-----------+                          |    |    | DOMAIN
+                     | a p |         |        |                             |    |    | SOCKET
+                     | n i |         |        | fork()                      |    |    | (DGRAMS)
+                     | o p |         +        |                             |    |    |
+                     | n e |      read()  +---v----------+------------+ sendto()-v----+-+
+                     |     +---------+---->  xripd rib   | rib pthread+-----+--> AF_UNIX|
+                     +-----+         |    +---+----------+------------+     |  +--------+
+                                     |        |    <-mutex_rib-> rib_entry_t|
+                                     +        |                             |
+  ROUTING        +---------------+  sendmsg() |  NLM_F_REQUEST              |
+   TABLE <-------+ NETLINK SOCKET<---+--------+                             |
+                 +---------------+   |                                      |
+                                     +                                      +
+                     kernel space        user space                           kernel space
+
 ```
 
 
