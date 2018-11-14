@@ -18,6 +18,8 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	memset(xripd_rib, 0, sizeof(*xripd_rib));
 	xripd_settings->xripd_rib = xripd_rib;
 
+	xripd_rib->size = 0;
+
 	xripd_rib->destroy_rib = &rib_null_destroy_rib;
 
 	// Init our filter:
@@ -105,8 +107,9 @@ static void rib_route_print(const rib_entry_t *in_entry) {
 // 	Optional: del_route will contain rib_entry_t for route to be deleted from the kernel's table
 static void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
+	int route_incremental = 0;
 	// Pass argument pointers straight through to the add_to_rib function:
-	(*xripd_settings->xripd_rib->add_to_rib)(add_rib_ret, in_entry, ins_route, del_route);
+	(*xripd_settings->xripd_rib->add_to_rib)(add_rib_ret, in_entry, ins_route, del_route, &route_incremental);
 
 	// Switch on the RIB's return behaviour
 	switch (*add_rib_ret) {
@@ -122,6 +125,7 @@ static void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret,
 			fprintf(stderr, "[rib]: add_to_rib result: INSTALL_NEW. Installing new route.\n");
 #endif
 			// If the route was learnt via network/RIP, install into routing table:
+			xripd_settings->xripd_rib->size += route_incremental;
 			if ( ins_route->origin == RIB_ORIGIN_REMOTE ) {
 				netlink_install_new_route(xripd_settings, ins_route);
 			} else {
@@ -311,6 +315,8 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	rib_entry_t ins_route; // route to add to our kernel table (if any?)
 	rib_entry_t del_route; // route to delete from our kernel table (if any?)
 
+	int delcount = 0;
+
 	// Spawn our rib_out thread:
 	pthread_t ribout_thread;
 	pthread_create(&ribout_thread, NULL, &rib_out_spawn, NULL);
@@ -394,7 +400,12 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		
 		// Set Metric = 16 for routes that have exceeded their time to live
 		// TODO: Actually implement a deletion function:
-		(*xripd_settings->xripd_rib->remove_expired_entries)();
+		delcount = 0;
+		(*xripd_settings->xripd_rib->remove_expired_entries)(&delcount);
+		xripd_settings->xripd_rib->size -= delcount;
+#if XRIPD_DEBUG == 1
+		fprintf(stderr, "[rib]: RIB Size: %d\n", xripd_settings->xripd_rib->size);
+#endif
 
 		// Dump our RIB only every 5th loop:
 		if ( (dump_count % 5) == 0 ) {

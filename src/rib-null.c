@@ -1,7 +1,7 @@
 #include "rib.h"
 #include "rib-null.h"
 
-int rib_null_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
+int rib_null_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route, int *rib_inc) {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[null]: Add to RIB Success\n");
 #endif
@@ -14,7 +14,7 @@ int rib_null_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t
 	return 0;
 }
 
-int rib_null_remove_expired_entries() {
+int rib_null_remove_expired_entries(int *delroute) {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[null]: Removing Expired Entries.\n");
 #endif

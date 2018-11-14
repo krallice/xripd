@@ -62,10 +62,12 @@ typedef struct xripd_rib_t {
 	time_t last_local_poll; // Time of our last netlink poll. Used to sync our rib with our local routes (determined through netlink).
 	struct filter_t *filter; // Pointer to our filter struct for filtering routes in/out of the RIB
 
+	uint32_t size;
+
 	// Function pointers for underlying datastore implementations:
-	int (*add_to_rib)(int*, const rib_entry_t*, rib_entry_t*, rib_entry_t*);
-	int (*remove_expired_entries)();
+	int (*add_to_rib)(int*, const rib_entry_t*, rib_entry_t*, rib_entry_t*, int*);
 	int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
+	int (*remove_expired_entries)(int*);
 	int (*dump_rib)();
 	void (*destroy_rib)();
 
