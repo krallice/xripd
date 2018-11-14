@@ -48,6 +48,8 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 
 	rib_entry_t *entry;
 	rib_ctl_hdr_t header;
+
+	// Format header:
 	header.version = RIB_CTL_HDR_VERSION_1;
 	header.msgtype = RIB_CTL_HDR_MSGTYPE_REPLY;
 
@@ -59,8 +61,6 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 
 	// Positive amount of rib entries:
 	if ( len != 0 ) {
-
-		// Format header:
 
 		// Iterate over the buffer to second last item:
 		for ( int i = 0; i < len; i++ ) {
