@@ -44,15 +44,79 @@ failed_socket_init:
 	return 1;
 }
 
-void *rib_out_spawn(void *arg) {
+static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
 
-	char buf[8192];
+	rib_entry_t *entry;
+	rib_ctl_hdr_t header;
+	header.version = RIB_CTL_HDR_VERSION_1;
+	header.msgtype = RIB_CTL_HDR_MSGTYPE_REPLY;
+
+	// Allocate enough memory on the heap for the entire RIB:
+	char *buf = (char *)malloc(xripd_settings->xripd_rib->size * (sizeof(rib_entry_t)));
+
+	// Populate buffer with our rib:
+	int len = xripd_settings->xripd_rib->serialise_rib(buf, &(xripd_settings->xripd_rib->size));
+
+	// Positive amount of rib entries:
+	if ( len != 0 ) {
+
+		// Format header:
+
+		// Iterate over the buffer to second last item:
+		for ( int i = 0; i < len; i++ ) {
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[rib-out]: Sending RIB_CTL_HDR_MSGTYPE_REPLY Msg No: %d\n", i);
+#endif
+			entry = (rib_entry_t*)(buf + (i * sizeof(rib_entry_t)));
+		}
+	}
+
+	free(buf);
+}
+
+static void listen_loop(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
+
+	int len = 0;
+	char *buf = (char *)malloc((sizeof(rib_entry_t)) + sizeof(rib_ctl_hdr_t));
+	memset(buf, 0, (sizeof(rib_entry_t) + sizeof(rib_ctl_hdr_t)));
+
+	// Parsing Header:
+	struct rib_ctl_hdr_t *rib_control_header;
+
+	// Listen Loop:
+	while (1) {
+
+		// Read len bytes from UNIX Socket, placing into buf:
+		len = read(sun_addresses->socketfd, buf, sizeof(buf));
+		
+		if ( len < sizeof(rib_control_header) ) {
+			break;
+		}
+		// Cast our raw recieved bytes to retrieve our header:
+		rib_control_header = (rib_ctl_hdr_t *)buf;
+
+		if ( rib_control_header->version != RIB_CTL_HDR_VERSION_1 ) {
+			fprintf(stderr, "[rib-out]: Received Unsupported Version.\n");
+			break;
+		}
+		switch (rib_control_header->msgtype) {
+			case RIB_CTL_HDR_MSGTYPE_REQUEST:
+				fprintf(stderr, "[rib-out]: Received RIB_CTRL_MSGTYPE_REQUEST!\n");
+				send_rib_ctl_reply(xripd_settings, sun_addresses);
+				break;
+			default:
+				break;
+		}
+	}
+
+	free(buf);
+}
+
+void *rib_out_spawn(void *xripd_settings) {
 
 	// Initialse our addresses struct on the stack:
 	sun_addresses_t sun_addresses;
 	memset(&sun_addresses, 0, sizeof(sun_addresses));
-	memset(&(sun_addresses.sockaddr_un_daemon), 0, sizeof(sun_addresses.sockaddr_un_daemon));
-	memset(&(sun_addresses.sockaddr_un_rib), 0, sizeof(sun_addresses.sockaddr_un_rib));
 
 	// Create our abstract UNIX Domain Socket:
 	if ( init_abstract_unix_socket(&sun_addresses) != 0 ) {
@@ -61,24 +125,10 @@ void *rib_out_spawn(void *arg) {
 		goto failed_socket;
 	}
 
-	int len = 0;
-	struct rib_ctl_hdr_t rib_control_header;
+	listen_loop(xripd_settings, &sun_addresses);
 
-	while (1) {
-		len = read(sun_addresses.socketfd, buf, sizeof(buf));
-		fprintf(stderr, "[rib-out]: Recieved %d Bytes.\n", len);
-		// Cast our raw recieved bytes to retrieve our header:
-		rib_control_header = *(rib_ctl_hdr_t *)buf;
-		fprintf(stderr, "[rib-out]: Received: %d Bytes.\n", len);
-		if ( rib_control_header.version != RIB_CTL_HDR_VERSION_1 ) {
-			fprintf(stderr, "[rib-out]: Received Unsupported Version.\n");
-			break;
-		}
-		if ( rib_control_header.msgtype == RIB_CTL_HDR_MSGTYPE_REQUEST ) {
-			fprintf(stderr, "[rib-out]: Received RIB_CTRL_MSGTYPE_REQUEST!\n");
-			fprintf(stderr, "[rib-out]: Time to dump RIB.\n");
-		}
-	}
+	// Should never hit here:
+	return NULL;
 
 failed_socket:
 	return NULL;

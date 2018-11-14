@@ -41,5 +41,7 @@ int rib_ll_invalidate_expired_local_routes();
 // Dump rib:
 int rib_ll_dump_rib();
 
+int rib_ll_serialise_rib(char *buf, const uint32_t *count);
+
 void rib_ll_destroy_rib();
 #endif

@@ -98,6 +98,30 @@ static int rib_ll_node_compare(const rib_entry_t *in_entry, const rib_ll_node_t 
 	}
 }
 
+// Given pointer to character buffer with a size (count * rib_entry_t)
+// Dump our rib into the buffer
+int rib_ll_serialise_rib(char *buf, const uint32_t *count) {
+
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[l-list]: Recieved request to serialise RIB into byte sequence.\n");
+#endif
+
+	rib_ll_node_t *cur = head;
+	rib_entry_t *cur_rib;
+	int index = 0;
+
+	// Ensure no overflow:
+	while ( (index <= *count) && cur != NULL  ) {
+
+		cur_rib = (rib_entry_t*)(buf + (sizeof(rib_entry_t) * index));
+		memcpy(cur_rib, &(cur->entry), sizeof(rib_entry_t));
+
+		index++;
+		cur = cur->next;
+	}
+	return index;
+}
+
 // Evaluate in_entry against our current RIB
 // Potentially return ins_route and/or del_route as return rib_entry_t types
 // which are used to add/delete desired routes from the kernel table:

@@ -35,6 +35,13 @@ int rib_null_dump_rib() {
 	return 0;
 }
 
+int rib_null_serialise_rib(char *buf, const uint32_t *count) {
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[null]: Serialising RIB, Empty no surprise ...\n");
+#endif
+	return 0;
+}
+
 void rib_null_destroy_rib() {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[null]: Destroying RIB, Nothing to destroy ...\n");

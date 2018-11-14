@@ -2,6 +2,7 @@
 #define XRIPD_RIB_OUT_H
 
 #include "xripd.h"
+#include "rib.h"
 #include "rib-ctl.h"
 
 // Standard Includes:
@@ -29,6 +30,6 @@
 #include <sys/select.h>
 #include <pthread.h>
 
-void *rib_out_spawn(void *arg);
+void *rib_out_spawn(void *xripd_settings);
 
 #endif

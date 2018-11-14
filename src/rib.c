@@ -47,6 +47,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->dump_rib = &rib_null_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_null_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_null_invalidate_expired_local_routes;
+		xripd_rib->serialise_rib = &rib_null_serialise_rib;
 		xripd_rib->destroy_rib = &rib_null_destroy_rib;
 
 		return 0;
@@ -56,6 +57,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->dump_rib = &rib_ll_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_ll_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_ll_invalidate_expired_local_routes;
+		xripd_rib->serialise_rib = &rib_ll_serialise_rib;
 		xripd_rib->destroy_rib = &rib_ll_destroy_rib;
 
 		// We can call a function on initialisation:
@@ -319,7 +321,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 
 	// Spawn our rib_out thread:
 	pthread_t ribout_thread;
-	pthread_create(&ribout_thread, NULL, &rib_out_spawn, NULL);
+	pthread_create(&ribout_thread, NULL, &rib_out_spawn, (void *)xripd_settings);
 
 	//rib_test_filter_init(xripd_settings->xripd_rib);
 

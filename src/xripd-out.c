@@ -59,8 +59,6 @@ void *xripd_out_spawn(void *arg) {
 	// Initialse our addresses struct on the stack:
 	sun_addresses_t sun_addresses;
 	memset(&sun_addresses, 0, sizeof(sun_addresses));
-	memset(&(sun_addresses.sockaddr_un_daemon), 0, sizeof(sun_addresses.sockaddr_un_daemon));
-	memset(&(sun_addresses.sockaddr_un_rib), 0, sizeof(sun_addresses.sockaddr_un_rib));
 
 	// Create our abstract UNIX Domain Socket:
 	if ( init_abstract_unix_socket(&sun_addresses) != 0 ) {
