@@ -101,12 +101,18 @@ static xripd_settings_t *init_xripd_settings() {
 	memset(xripd_settings, 0, sizeof(xripd_settings_t));
 
 	// Check interface string length, and copy if safe:
-	//if ( strlen(XRIPD_PASSIVE_IFACE) <= IFNAMSIZ ) {
-		//strcpy(xripd_settings->iface_name, XRIPD_PASSIVE_IFACE);
-	//} else {
-		//fprintf(stderr, "[daemon] Error, Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
-		//return NULL;
-	//}	
+	if ( strlen(XRIPD_PASSIVE_IFACE) <= IFNAMSIZ ) {
+		strcpy(xripd_settings->iface_name, XRIPD_PASSIVE_IFACE);
+	} else {
+		fprintf(stderr, "[daemon] Error, Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
+		return NULL;
+	}	
+
+	// Set Timers:
+	xripd_settings->rip_timers.route_update = RIP_TIMER_UPDATE_DEFAULT;
+	xripd_settings->rip_timers.route_invalid = RIP_TIMER_INVALID_DEFAULT;
+	xripd_settings->rip_timers.route_holddown = RIP_TIMER_HOLDDOWN_DEFAULT; // NOT YET IMPLEMENTED
+	xripd_settings->rip_timers.route_flush = RIP_TIMER_FLUSH_DEFAULT;
 	
 	xripd_settings->xripd_rib = NULL;
 	xripd_settings->filter_mode = XRIPD_FILTER_MODE_NULL; // Default Value
