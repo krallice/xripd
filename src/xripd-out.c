@@ -54,7 +54,26 @@ failed_socket_init:
 	return 1;
 }
 
-void *xripd_out_spawn(void *arg) {
+// Main control loop of the secondary thread in the daemon process:
+static void main_loop(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses){
+
+	int retval;
+	rib_ctl_hdr_t rib_control_header;
+	rib_control_header.version = RIB_CTL_HDR_VERSION_1;
+	rib_control_header.msgtype = RIB_CTL_HDR_MSGTYPE_REQUEST;
+
+	while (1) {
+		fprintf(stderr, "[xripd-out]: Sending RIB_CTRL_MSGTYPE_REQUEST to xripd-rib.\n");
+		retval = sendto(sun_addresses->socketfd, &rib_control_header, sizeof(rib_control_header), 
+				0, (struct sockaddr *) &(sun_addresses->sockaddr_un_rib), sizeof(struct sockaddr_un));
+		fprintf(stderr, "[xripd-out]: Sent %d bytes\n", retval);
+		sleep(1);
+	}
+}
+
+// Spawn and setup our secondary thread in the daemon process
+// Responsible for initialising our Abstract Unix Domain Socket, and then entering our main loop:
+void *xripd_out_spawn(void *xripd_settings) {
 
 	// Initialse our addresses struct on the stack:
 	sun_addresses_t sun_addresses;
@@ -67,18 +86,7 @@ void *xripd_out_spawn(void *arg) {
 		goto failed_socket;
 	}
 
-	int retval;
-	rib_ctl_hdr_t rib_control_header;
-	rib_control_header.version = RIB_CTL_HDR_VERSION_1;
-	rib_control_header.msgtype = RIB_CTL_HDR_MSGTYPE_REQUEST;
-	
-	while (1) {
-		fprintf(stderr, "[xripd-out]: Sending RIB_CTRL_MSGTYPE_REQUEST to xripd-rib.\n");
-		retval = sendto(sun_addresses.socketfd, &rib_control_header, sizeof(rib_control_header), 0, (struct sockaddr *) &(sun_addresses.sockaddr_un_rib), sizeof(struct sockaddr_un));
-		fprintf(stderr, "[xripd-out]: Sent %d bytes\n", retval);
-		sleep(1);
-	}
-
+	main_loop(xripd_settings, &sun_addresses);
 
 failed_socket:
 	return NULL;

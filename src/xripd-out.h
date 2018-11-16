@@ -29,6 +29,6 @@
 #include <sys/select.h>
 #include <pthread.h>
 
-void *xripd_out_spawn(void *arg);
+void *xripd_out_spawn(void *xripd_settings);
 
 #endif

@@ -332,7 +332,7 @@ int main(int argc, char **argv) {
 		// 	+ Listens on an Abstract Unix Domain Socket 
 		// 	+ Is responsible for sending RIPv2 Messages on the wire
 		pthread_t xripd_out_thread;
-		pthread_create(&xripd_out_thread, NULL, &xripd_out_spawn, NULL);
+		pthread_create(&xripd_out_thread, NULL, &xripd_out_spawn, (void *)xripd_settings);
 
 		// Main Listening Loop
 		xripd_listen_loop(xripd_settings);

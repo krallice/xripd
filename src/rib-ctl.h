@@ -1,6 +1,8 @@
 #ifndef RIB_CTL_H
 #define RIB_CTL_H
 
+#include "rib.h"
+#include "xripd.h"
 #include <stdint.h>
 
 // For extensibility:

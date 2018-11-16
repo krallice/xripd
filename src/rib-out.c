@@ -46,18 +46,23 @@ failed_socket_init:
 
 static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
 
-	rib_entry_t *entry;
-	rib_ctl_hdr_t header;
+	int len = 0;
+	int retval = 0;
+
+	struct rib_ctl_reply {
+		rib_ctl_hdr_t header;
+		rib_entry_t entry;
+	} ctl_reply;
 
 	// Format header:
-	header.version = RIB_CTL_HDR_VERSION_1;
-	header.msgtype = RIB_CTL_HDR_MSGTYPE_REPLY;
+	ctl_reply.header.version = RIB_CTL_HDR_VERSION_1;
+	ctl_reply.header.msgtype = RIB_CTL_HDR_MSGTYPE_REPLY;
 
 	// Allocate enough memory on the heap for the entire RIB:
 	char *buf = (char *)malloc(xripd_settings->xripd_rib->size * (sizeof(rib_entry_t)));
 
 	// Populate buffer with our rib:
-	int len = xripd_settings->xripd_rib->serialise_rib(buf, &(xripd_settings->xripd_rib->size));
+	len = xripd_settings->xripd_rib->serialise_rib(buf, &(xripd_settings->xripd_rib->size));
 
 	// Positive amount of rib entries:
 	if ( len != 0 ) {
@@ -67,16 +72,39 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[rib-out]: Sending RIB_CTL_HDR_MSGTYPE_REPLY Msg No: %d\n", i);
 #endif
-			entry = (rib_entry_t*)(buf + (i * sizeof(rib_entry_t)));
+			// Add entry to reply struct:
+			memcpy(&(ctl_reply.entry), (rib_entry_t*)(buf + (i * sizeof(rib_entry_t))), sizeof(rib_entry_t));
+			
+			//ctl_reply.entry = (rib_entry_t*)(buf + (i * sizeof(rib_entry_t)));
+			
+			// Send reply via socket back to the daemon:
+			retval = sendto(sun_addresses->socketfd, &ctl_reply, sizeof(ctl_reply), 
+					0, (struct sockaddr *) &(sun_addresses->sockaddr_un_daemon), sizeof(struct sockaddr_un));
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[rib-out]: Sent %d bytes in RIB_CTL_HDR_MSGTYPE_REPLY Msg No: %d\n", retval, i);
+#endif
+
 		}
 	}
+	
+	// Format header for ENDREPLY:
+	ctl_reply.header.version = RIB_CTL_HDR_VERSION_1;
+	ctl_reply.header.msgtype = RIB_CTL_HDR_MSGTYPE_ENDREPLY;
+	
+	// Send endreply via socket to the daemon:
+	retval = sendto(sun_addresses->socketfd, &(ctl_reply.header), sizeof(ctl_reply.header), 
+			0, (struct sockaddr *) &(sun_addresses->sockaddr_un_daemon), sizeof(struct sockaddr_un));
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[rib-out]: Sent %d bytes in RIB_CTL_HDR_MSGTYPE_ENDREPLY.\n", retval);
+#endif
 
+	// Free up the heap:
 	free(buf);
 }
 
 static void listen_loop(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
 
-	int len = 0;
+	//int len = 0;
 	char *buf = (char *)malloc((sizeof(rib_entry_t)) + sizeof(rib_ctl_hdr_t));
 	memset(buf, 0, (sizeof(rib_entry_t) + sizeof(rib_ctl_hdr_t)));
 
@@ -87,11 +115,14 @@ static void listen_loop(const xripd_settings_t *xripd_settings, const sun_addres
 	while (1) {
 
 		// Read len bytes from UNIX Socket, placing into buf:
-		len = read(sun_addresses->socketfd, buf, sizeof(buf));
+		//len = read(sun_addresses->socketfd, buf, sizeof(buf));
+		read(sun_addresses->socketfd, buf, sizeof(buf));
 		
-		if ( len < sizeof(rib_control_header) ) {
-			break;
-		}
+		// Todo: Fix
+		// if ( len < sizeof(rib_control_header) ) {
+			// break;
+		// }
+		
 		// Cast our raw recieved bytes to retrieve our header:
 		rib_control_header = (rib_ctl_hdr_t *)buf;
 
