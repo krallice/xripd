@@ -51,34 +51,24 @@
 #define RIP_ROUTE_GC_TIMEOUT (int)(RIP_ROUTE_TIMEOUT + 120)
 
 #define RIP_TIMER_UPDATE_DEFAULT 30
-#define RIP_TIMER_INVALID_DEFAULT 30
-#define RIP_TIMER_HOLDDOWN_DEFAULT 30
-#define RIP_TIMER_FLUSH_DEFAULT 30
-
-// Rip Timers:
-//
-// update
-// Rate (in seconds) at which updates are sent.
-//
-// invalid
-// Interval of time (in seconds) after which a route is declared invalid; it should be at least three times the value of the update argument. A route becomes invalid when no updates refresh the route. The route then enters into a holddown state where it is marked as inaccessible and advertised as unreachable. However, the route is still used to forward packets. The range is from 1 to 4,294,967,295. The default is 180 seconds.
-//
-// holddown
-// Interval (in seconds) during which routing information regarding better paths is suppressed; it should be at least three times the value of the update argument. A route enters into a holddown state when an update packet is received that indicates that the route is unreachable. The route is marked as inaccessible and advertised as unreachable. However, the route is still used to forward packets. When holddown expires, routes advertised by other sources are accepted and the route is no longer inaccessible. The range is from 0 to 4,294,967,295. The default is 180 seconds.
-//
-// flush
-// Amount of time (in seconds) that must pass before the route is removed from the routing table; the interval specified should be greater than the sum of the invalid argument plus the holddown argument. If it is less than this sum, the proper holddown interval cannot elapse, which results in a new route being accepted before the holddown interval expires. The range is from 1 to 4,294,967,295. The default is 240 seconds.
+#define RIP_TIMER_INVALID_DEFAULT 180 
+#define RIP_TIMER_HOLDDOWN_DEFAULT 180 
+#define RIP_TIMER_FLUSH_DEFAULT 200 
 
 typedef struct rip_timers_t {
+	
 	// Update: Rate at which updates are sent:
 	uint16_t route_update;
+	
 	// Invalid: Interval at which the route is marked at Invalid (Metric == Infinity). Kept in RIB, but removed from Kernel table:
 	// Default: 180s Should be 3x Update
 	uint16_t route_invalid;
-	// Todo: Implement:
+
+	// Holddown TODO Implement: Amount of time the router will refuse to learn about the route from other addresses, only from the current router
 	// Default: 180s Should be 3x Update
 	uint16_t route_holddown;
-	// Amount of time that must pass before the route is removed completely from the routing table:
+
+	// Flush: Amount of time that must pass before the route is removed completely from the routing table:
 	// Default 240s
 	uint16_t route_flush;
 } rip_timers_t;
