@@ -54,20 +54,118 @@ failed_socket_init:
 	return 1;
 }
 
-// Main control loop of the secondary thread in the daemon process:
-static void main_loop(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses){
+static void send_rip_update(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
 
-	int retval;
 	rib_ctl_hdr_t rib_control_header;
 	rib_control_header.version = RIB_CTL_HDR_VERSION_1;
 	rib_control_header.msgtype = RIB_CTL_HDR_MSGTYPE_REQUEST;
 
+	fprintf(stderr, "[xripd-out]: Sending RIB_CTRL_MSGTYPE_REQUEST to xripd-rib.\n");
+	sendto(sun_addresses->socketfd, &rib_control_header, sizeof(rib_control_header), 
+		0, (struct sockaddr *) &(sun_addresses->sockaddr_un_rib), sizeof(struct sockaddr_un));
+}
+
+static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses){
+
+	int len = 0;
+	int i = 0;
+
+	struct rib_ctl_reply {
+		rib_ctl_hdr_t header;
+		rib_entry_t entry;
+	} ctl_reply;
+
+	char *buf = (char *)malloc(sizeof(ctl_reply));
+	memset(buf, 0, sizeof(ctl_reply));
+
+	struct rib_ctl_hdr_t *header;
+
+	len = read(sun_addresses->socketfd, buf, sizeof(ctl_reply));
+
+	int retry_count = 0;
+	int max_retries = 3;
+
+	// Parse our header:
+	if ( len >= sizeof(rib_ctl_hdr_t) ) {
+		header = (rib_ctl_hdr_t *)buf;
+
+		// If not version 1, bomb out:
+		if ( header->version != RIB_CTL_HDR_VERSION_1 ) {          
+			fprintf(stderr, "[xripd-out]: Received Unsupported Version.\n"); 
+			goto error_unsupported;
+		} 
+
+		// Parse the msg type:
+		switch (header->msgtype) {
+
+			// First packet recieved was a start of REPLY stream:
+			case RIB_CTL_HDR_MSGTYPE_REPLY:
+
+				while ( retry_count != max_retries ) {
+					// We can start to use ctl_reply now as we are expecting header + rib entries:
+					while ( len >= sizeof(ctl_reply) && 
+						header->msgtype == RIB_CTL_HDR_MSGTYPE_REPLY ) {
+						i++;
+						fprintf(stderr, "[xripd-out]: Received RIB_CTRL_MSGTYPE_REPLY No# %d\n", i);
+						len = read(sun_addresses->socketfd, buf, sizeof(ctl_reply));
+						header = (rib_ctl_hdr_t *)buf;
+					}
+					// ENDREPLY message recieved to signify end of stream:
+					if ( len >= sizeof(rib_ctl_hdr_t) && header->msgtype == RIB_CTL_HDR_MSGTYPE_ENDREPLY ) {
+						fprintf(stderr, "[xripd-out]: Successfully received RIB_CTRL_MSGTYPE_ENDREPLY\n");
+						fprintf(stderr, "[xripd-out]: Route Count Received: %d\n", i);
+						retry_count = max_retries;
+					// Msg to be aborted:
+					} else {
+						fprintf(stderr, "[xripd-out]: ENDREPLY not Recieved, Ignoring packet.\n");
+						fprintf(stderr, "[xripd-out]: Waiting further.%d\n", i);
+						len = read(sun_addresses->socketfd, buf, sizeof(ctl_reply));
+						retry_count++;
+					}
+				}
+			default:
+				break;
+		}
+	}
+
+error_unsupported:
+	free(buf);
+}
+
+// Main control loop of the secondary thread in the daemon process:
+static void main_loop(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses){
+
+	//uint8_t msgtype_request_sent = 0;
+	time_t next_update_time = 0;
+
+	// select() variables:
+	fd_set readfds; // Set of file descriptors (in our case, only one) for select() to watch for
+	struct timeval timeout; // Time to wait for data in our select()ed socket
+	int sret; // select() return value
+
 	while (1) {
-		fprintf(stderr, "[xripd-out]: Sending RIB_CTRL_MSGTYPE_REQUEST to xripd-rib.\n");
-		retval = sendto(sun_addresses->socketfd, &rib_control_header, sizeof(rib_control_header), 
-				0, (struct sockaddr *) &(sun_addresses->sockaddr_un_rib), sizeof(struct sockaddr_un));
-		fprintf(stderr, "[xripd-out]: Sent %d bytes\n", retval);
-		sleep(1);
+
+		send_rip_update(xripd_settings, sun_addresses);
+		next_update_time = time(NULL) + xripd_settings->rip_timers.route_update;
+
+		while (time(NULL) < next_update_time) {
+
+                        // Wipe our set of fds, and monitor our input pipe descriptor:
+                        FD_ZERO(&readfds); 
+                        FD_SET(sun_addresses->socketfd, &readfds); 
+
+                        // Timeout value; (how often to poll)
+                        timeout.tv_sec = 1;
+                        timeout.tv_usec = 0;
+
+                        // Wait up to a second for a msg entry to come in
+                        sret = select(sun_addresses->socketfd + 1, &readfds, NULL, NULL, &timeout);
+	
+			// Got a message, now let's parse it:
+			if (sret > 0) {
+				parse_rib_ctl_msgs(xripd_settings, sun_addresses);
+			}
+		}
 	}
 }
 

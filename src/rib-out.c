@@ -69,9 +69,7 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 
 		// Iterate over the buffer to second last item:
 		for ( int i = 0; i < len; i++ ) {
-#if XRIPD_DEBUG == 1
-			fprintf(stderr, "[rib-out]: Sending RIB_CTL_HDR_MSGTYPE_REPLY Msg No: %d\n", i);
-#endif
+
 			// Add entry to reply struct:
 			memcpy(&(ctl_reply.entry), (rib_entry_t*)(buf + (i * sizeof(rib_entry_t))), sizeof(rib_entry_t));
 			
@@ -81,7 +79,7 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 			retval = sendto(sun_addresses->socketfd, &ctl_reply, sizeof(ctl_reply), 
 					0, (struct sockaddr *) &(sun_addresses->sockaddr_un_daemon), sizeof(struct sockaddr_un));
 #if XRIPD_DEBUG == 1
-			fprintf(stderr, "[rib-out]: Sent %d bytes in RIB_CTL_HDR_MSGTYPE_REPLY Msg No: %d\n", retval, i);
+			fprintf(stderr, "[rib-out]: Sent %d bytes in RIB_CTL_HDR_MSGTYPE_REPLY Msg No: %d\n", retval, i + 1);
 #endif
 
 		}
@@ -132,7 +130,7 @@ static void listen_loop(const xripd_settings_t *xripd_settings, const sun_addres
 		}
 		switch (rib_control_header->msgtype) {
 			case RIB_CTL_HDR_MSGTYPE_REQUEST:
-				fprintf(stderr, "[rib-out]: Received RIB_CTRL_MSGTYPE_REQUEST!\n");
+				fprintf(stderr, "[rib-out]: Received RIB_CTRL_MSGTYPE_REQUEST from xripd-daemon.\n");
 				send_rib_ctl_reply(xripd_settings, sun_addresses);
 				break;
 			default:
