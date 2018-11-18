@@ -105,20 +105,30 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 					// We can start to use ctl_reply now as we are expecting header + rib entries:
 					while ( len >= sizeof(ctl_reply) && 
 						header->msgtype == RIB_CTL_HDR_MSGTYPE_REPLY ) {
-						i++;
-						fprintf(stderr, "[xripd-out]: Received RIB_CTRL_MSGTYPE_REPLY No# %d\n", i);
+
 						len = read(sun_addresses->socketfd, buf, sizeof(ctl_reply));
 						header = (rib_ctl_hdr_t *)buf;
+
+						i++;
+#if XRIPD_DEBUG == 1
+						fprintf(stderr, "[xripd-out]: Received RIB_CTRL_MSGTYPE_REPLY No# %d\n", i);
+#endif
 					}
 					// ENDREPLY message recieved to signify end of stream:
 					if ( len >= sizeof(rib_ctl_hdr_t) && header->msgtype == RIB_CTL_HDR_MSGTYPE_ENDREPLY ) {
+#if XRIPD_DEBUG == 1
 						fprintf(stderr, "[xripd-out]: Successfully received RIB_CTRL_MSGTYPE_ENDREPLY\n");
 						fprintf(stderr, "[xripd-out]: Route Count Received: %d\n", i);
+#endif
 						retry_count = max_retries;
-					// Msg to be aborted:
+
+					// Msg to be aborted, try again, up until max_retries amounts, otherwise
+					// incomplete message stream, must be dropped
 					} else {
+#if XRIPD_DEBUG == 1
 						fprintf(stderr, "[xripd-out]: ENDREPLY not Recieved, Ignoring packet.\n");
 						fprintf(stderr, "[xripd-out]: Waiting further.%d\n", i);
+#endif
 						len = read(sun_addresses->socketfd, buf, sizeof(ctl_reply));
 						retry_count++;
 					}
