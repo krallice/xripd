@@ -30,6 +30,9 @@
 #include <sys/select.h>
 #include <pthread.h>
 
+// Entry point for our rib-out thread
+// Responsible for retrieving all routes from the rib
+// and sending them via a Unix Domain socket to the daemon process
 void *rib_out_spawn(void *xripd_settings);
 
 #endif
