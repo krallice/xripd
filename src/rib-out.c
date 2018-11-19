@@ -83,7 +83,6 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 #if XRIPD_DEBUG == 1
 			fprintf(stderr, "[rib-out]: Sent %d bytes in RIB_CTL_HDR_MSGTYPE_REPLY Msg No: %d\n", retval, i + 1);
 #endif
-
 		}
 
 		// Format header for ENDREPLY, this it to let the daemon know we have reached the end of our datagram stream:
