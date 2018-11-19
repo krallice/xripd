@@ -1,5 +1,13 @@
 #include "rib-out.h"
 
+static uint8_t rip_datagram[RIP_DATAGRAM_SIZE];
+
+static struct rip_msg_header_t ripv2_update_header = {
+	.version = RIP_SUPPORTED_VERSION,
+	.command = RIP_HEADER_RESPONSE,
+	.zero = 0
+}; 
+
 // Given a sun_addresses_t struct, Populate our daemon and rib addresses, bind to the daemon address
 // for an Abtract Unix Domain Socket
 static int init_abstract_unix_socket(sun_addresses_t *s) {
@@ -41,6 +49,33 @@ failed_bind:
 	
 failed_socket_init:
 	return 1;
+}
+
+static int format_ripv2_update_datagram(const int entry_num, rib_entry_t *rib_entry, int force_send) {
+
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[xripd-out]: RIB Entry %d / %d\n", entry_num, XRIPD_ENTRIES_PER_UPDATE);
+#endif
+
+	// If the caller has *NOT* told us to force send the datagram:
+	if ( force_send == 0 ) {
+
+		//
+		// Todo: Do something with the rib_entry
+		//
+		
+		// Pack up to XRIPD_ENTRIES_PER_UPDATE into a single datagram, if we have hit the limit, fire the packet
+		// onto the network:
+		if ( (entry_num != 0 ) && (entry_num % XRIPD_ENTRIES_PER_UPDATE == 0) ) {
+			fprintf(stderr, "[xripd-out]: FIRE!!!\n");
+		}
+
+	// Caller has asked us to sent the datagram onto the network regardless, send it:
+	} else if ( force_send == 1 ) {
+		fprintf(stderr, "[xripd-out]: FIRE!!!\n");
+	}
+
+	return 0;
 }
 
 // If we've got here, we've recieved some data on our sun_addresses->socketfd, time to parse this data:
@@ -96,18 +131,21 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 					// it is a reply message (redundant on first pass, but important for secondary passes):
 					while ( len >= sizeof(ctl_reply) && 
 						header->msgtype == RIB_CTL_HDR_MSGTYPE_REPLY ) {
+
+						// Increment our received count:
+						recv_count++;
 #if XRIPD_DEBUG == 1
-						fprintf(stderr, "[xripd-out]: Received RIB_CTRL_MSGTYPE_REPLY No# %d\n", recv_count + 1);
+						fprintf(stderr, "[xripd-out]: Received RIB_CTRL_MSGTYPE_REPLY No# %d\n", recv_count);
 #endif
-
-						//
-						// Do something with the packet
-						//
-
+						// Cast our buffer as a ctl_reply, and send the rib_entry_t to the
+						// handler function to pack it into our static rip_datagram variable
+						// Function may or may not place the packet onto the wire
+						ctl_reply = (*(struct rib_ctl_reply *)buf);
+						format_ripv2_update_datagram(recv_count, &(ctl_reply.entry), 0);
+				
 						// Read next packet, look at the header, and increment our count:
 						len = read(sun_addresses->socketfd, buf, sizeof(ctl_reply));
 						header = (rib_ctl_hdr_t *)buf;
-						recv_count++;
 					}
 
 					// ENDREPLY message recieved to signify end of stream:
@@ -116,6 +154,7 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 						fprintf(stderr, "[xripd-out]: Successfully received RIB_CTRL_MSGTYPE_ENDREPLY\n");
 						fprintf(stderr, "[xripd-out]: Route Count Received: %d\n", recv_count);
 #endif
+						format_ripv2_update_datagram(recv_count, NULL, 1);
 						retry_count = max_retries;
 
 					// We've recieved something unexpected, let's try again to either read more REPLY messages

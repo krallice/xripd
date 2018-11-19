@@ -28,6 +28,8 @@
 #define XRIPD_PASSIVE_IFACE "enp0s8"
 #define XRIPD_DEBUG 0x01
 
+#define XRIPD_ENTRIES_PER_UPDATE 4
+
 // RIP Protocol Defines:
 #define RIP_MCAST_IP "224.0.0.9"
 #define RIP_UDP_PORT 520
@@ -46,7 +48,7 @@
 // RIP Entry Defines:
 #define RIP_AFI_INET 2
 
-// RIP Variables
+// RIP Variables 
 #define RIP_ROUTE_TIMEOUT 45
 #define RIP_ROUTE_GC_TIMEOUT (int)(RIP_ROUTE_TIMEOUT + 120)
 
