@@ -1,11 +1,5 @@
 #include "rib-out.h"
 
-typedef struct sun_addresses_t {
-	int socketfd;
-	struct sockaddr_un sockaddr_un_daemon;
-	struct sockaddr_un sockaddr_un_rib;
-} sun_addresses_t;
-
 static int init_abstract_unix_socket(sun_addresses_t *s) {
 
 	s->sockaddr_un_rib.sun_family = AF_UNIX;
@@ -44,11 +38,14 @@ failed_socket_init:
 	return 1;
 }
 
+// Send a serialise requeset to our rib, to return our routes into a buffer,
+// Send these via the 'rib_ctl' buffer back to the daemon via a reply message:
 static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
 
 	int len = 0;
 	int retval = 0;
 
+	// rib_ctl_reply struct:
 	struct rib_ctl_reply {
 		rib_ctl_hdr_t header;
 		rib_entry_t entry;
@@ -61,13 +58,13 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 	// Allocate enough memory on the heap for the entire RIB:
 	char *buf = (char *)malloc(xripd_settings->xripd_rib->size * (sizeof(rib_entry_t)));
 
-	// Populate buffer with our rib:
+	// Populate buffer with our rib in a serialised format, in a block of rib_entry_t's:
 	len = xripd_settings->xripd_rib->serialise_rib(buf, &(xripd_settings->xripd_rib->size));
 
-	// Positive amount of rib entries:
+	// If we have a positive amount of rib entries (aka, there is some data within the rib)
 	if ( len != 0 ) {
 
-		// Iterate over the buffer to second last item:
+		// Iterate over the buffer:
 		for ( int i = 0; i < len; i++ ) {
 
 			// Add entry to reply struct:
@@ -83,19 +80,20 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 #endif
 
 		}
-	}
-	
-	// Format header for ENDREPLY:
-	ctl_reply.header.version = RIB_CTL_HDR_VERSION_1;
-	ctl_reply.header.msgtype = RIB_CTL_HDR_MSGTYPE_ENDREPLY;
-	
-	// Send endreply via socket to the daemon:
-	retval = sendto(sun_addresses->socketfd, &(ctl_reply.header), sizeof(ctl_reply.header), 
-			0, (struct sockaddr *) &(sun_addresses->sockaddr_un_daemon), sizeof(struct sockaddr_un));
+
+		// Format header for ENDREPLY, this it to let the daemon know we have reached the end of our datagram stream:
+		ctl_reply.header.version = RIB_CTL_HDR_VERSION_1;
+		ctl_reply.header.msgtype = RIB_CTL_HDR_MSGTYPE_ENDREPLY;
+		
+		// Send endreply via socket to the daemon:
+		retval = sendto(sun_addresses->socketfd, &(ctl_reply.header), sizeof(ctl_reply.header), 
+				0, (struct sockaddr *) &(sun_addresses->sockaddr_un_daemon), sizeof(struct sockaddr_un));
 #if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib-out]: Sent %d bytes in RIB_CTL_HDR_MSGTYPE_ENDREPLY.\n", retval);
+		fprintf(stderr, "[rib-out]: Sent %d bytes in RIB_CTL_HDR_MSGTYPE_ENDREPLY.\n", retval);
 #endif
 
+	}
+	
 	// Free up the heap:
 	free(buf);
 }

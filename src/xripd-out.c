@@ -1,11 +1,5 @@
 #include "rib-out.h"
 
-typedef struct sun_addresses_t {
-	int socketfd;
-	struct sockaddr_un sockaddr_un_daemon;
-	struct sockaddr_un sockaddr_un_rib;
-} sun_addresses_t;
-
 static int init_abstract_unix_socket(sun_addresses_t *s) {
 
 	s->sockaddr_un_rib.sun_family = AF_UNIX;
