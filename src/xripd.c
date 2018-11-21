@@ -171,6 +171,15 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 			perror("recv");
 		} else {
 
+			// Protect against loops by NOT accepting traffic delivered to the daemon from itself:
+			// This is possible if the upstream switchport delivers multicast traffic back to the source port:
+			if ( xripd_settings->self_ip.sin_addr.s_addr == source_address.sin_addr.s_addr ) {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "[daemon]: Saw self IP in datagram. Ignoring for loop prevention.\n");
+#endif
+				continue;
+			}
+
 			rip_msg_header_t *msg_header = (rip_msg_header_t *)receive_buffer;
 
 			char source_address_p[16];
