@@ -86,7 +86,8 @@ typedef struct xripd_settings_t {
 	uint8_t sd; 			// Socket Descriptor (for inbound RIP Packets)
 	uint8_t nlsd;			// Netlink Socket Descriptor (for route table manipulation)
 
-	uint8_t passive_mode;
+	uint8_t passive_mode;		// Enable Passive Flag (aka do not advertise on net)
+	struct sockaddr_in self_ip;	// Self IP of interface daemon is bound to. Do not accept inbound rip updates when source = self_ip (loop avoidance)
 	
 	// Interfaces:
 	char iface_name[IFNAMSIZ]; 	// Human String for an interface, ie. "eth3" or "enp0s3"

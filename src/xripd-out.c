@@ -1,7 +1,9 @@
 #include "rib-out.h"
 
-static uint8_t rip_datagram[RIP_DATAGRAM_SIZE];
+// Fixed place in memory to hold a datagram:
+static uint8_t rip_update_datagram[RIP_DATAGRAM_SIZE];
 
+// Fixed place in memory to hold a copy of our standard v2 response header:
 static struct rip_msg_header_t ripv2_update_header = {
 	.version = RIP_SUPPORTED_VERSION,
 	.command = RIP_HEADER_RESPONSE,
@@ -51,7 +53,33 @@ failed_socket_init:
 	return 1;
 }
 
-static int format_ripv2_update_datagram(const int entry_num, rib_entry_t *rib_entry, int force_send) {
+// Send datagram onto the network:
+static int fire_ripv2_update_datagram(const xripd_settings_t *xripd_settings) {
+
+	int ret = 0;
+
+	// Declare destination address:
+	struct sockaddr_in dest;
+
+	// Format address:
+	memset(&dest, 0, sizeof(dest));
+	dest.sin_family = AF_INET;
+	dest.sin_addr.s_addr = inet_addr(RIP_MCAST_IP);
+	dest.sin_port = htons(RIP_UDP_PORT);
+	
+	// char msg[2] = "Z";
+
+	ret = sendto(xripd_settings->sd, rip_update_datagram, sizeof(rip_update_datagram), 0, (struct sockaddr *) &dest, sizeof(dest));
+	fprintf(stderr, "[xripd-out]: ____ RET ____ == %d\n", ret);
+
+	return 0;
+}
+
+// Given an input of a rib entry, and an entry_num, place the entry into a rip update datagram
+// Use the memory space allocated out of the static/global area of the exe
+// Place up to XRIPD_ENTRIES_PER_UPDATE entries into a single datagram
+// If force_send is set, fire off the datagram immediately
+static int format_ripv2_update_datagram(const xripd_settings_t *xripd_settings, const int entry_num, rib_entry_t *rib_entry, int force_send) {
 
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[xripd-out]: RIB Entry %d / %d\n", entry_num, XRIPD_ENTRIES_PER_UPDATE);
@@ -68,11 +96,13 @@ static int format_ripv2_update_datagram(const int entry_num, rib_entry_t *rib_en
 		// onto the network:
 		if ( (entry_num != 0 ) && (entry_num % XRIPD_ENTRIES_PER_UPDATE == 0) ) {
 			fprintf(stderr, "[xripd-out]: FIRE!!!\n");
+			fire_ripv2_update_datagram(xripd_settings);
 		}
 
 	// Caller has asked us to sent the datagram onto the network regardless, send it:
 	} else if ( force_send == 1 ) {
 		fprintf(stderr, "[xripd-out]: FIRE!!!\n");
+		fire_ripv2_update_datagram(xripd_settings);
 	}
 
 	return 0;
@@ -141,7 +171,7 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 						// handler function to pack it into our static rip_datagram variable
 						// Function may or may not place the packet onto the wire
 						ctl_reply = (*(struct rib_ctl_reply *)buf);
-						format_ripv2_update_datagram(recv_count, &(ctl_reply.entry), 0);
+						format_ripv2_update_datagram(xripd_settings, recv_count, &(ctl_reply.entry), 0);
 				
 						// Read next packet, look at the header, and increment our count:
 						len = read(sun_addresses->socketfd, buf, sizeof(ctl_reply));
@@ -154,7 +184,7 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 						fprintf(stderr, "[xripd-out]: Successfully received RIB_CTRL_MSGTYPE_ENDREPLY\n");
 						fprintf(stderr, "[xripd-out]: Route Count Received: %d\n", recv_count);
 #endif
-						format_ripv2_update_datagram(recv_count, NULL, 1);
+						format_ripv2_update_datagram(xripd_settings, recv_count, NULL, 1);
 						retry_count = max_retries;
 
 					// We've recieved something unexpected, let's try again to either read more REPLY messages
@@ -191,6 +221,17 @@ static void send_ctl_request(const xripd_settings_t *xripd_settings, const sun_a
 		0, (struct sockaddr *) &(sun_addresses->sockaddr_un_rib), sizeof(struct sockaddr_un));
 }
 
+static void init_update_datagram(void) {
+
+	// Zeroise our statically allocated datagram:
+	memset(&rip_update_datagram, 0, sizeof(rip_update_datagram));
+
+	// Copy the update header to the header of the packet:
+	memcpy(&rip_update_datagram, &ripv2_update_header, sizeof(ripv2_update_header));
+
+	return;
+}
+
 
 // Main control loop:
 static void main_loop(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses){
@@ -202,6 +243,9 @@ static void main_loop(const xripd_settings_t *xripd_settings, const sun_addresse
 	fd_set readfds; // Set of file descriptors (in our case, only one) for select() to watch for
 	struct timeval timeout; // Time to wait for data in our select()ed socket
 	int sret; // select() return value
+
+	// Init our statically allocated datagram:
+	init_update_datagram();
 
 	while (1) {
 

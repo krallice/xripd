@@ -59,6 +59,12 @@ static int init_socket(xripd_settings_t *xripd_settings) {
 		close(xripd_settings->sd);
 		fprintf(stderr, "[daemon]: Error, Unable to get IP Address of %s\n", xripd_settings->iface_name);
 		return 1;
+	} else {
+#if XRIPD_DEBUG == 1
+		xripd_settings->self_ip = *((struct sockaddr_in *)&ifrq.ifr_addr);
+		//fprintf(stderr, "__ MILES __ %s\n", inet_ntoa(((struct sockaddr_in *)&ifrq.ifr_addr)->sin_addr));
+		fprintf(stderr, "[daemon]: Self IP: %s\n", inet_ntoa(xripd_settings->self_ip.sin_addr));
+#endif
 	}
 
 	// Convert the presentation string for RIP_MCAST_IP into a network object:
