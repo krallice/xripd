@@ -257,11 +257,11 @@ int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *
 }
 
 // Expire out old entries out of the rib:
-int rib_ll_remove_expired_entries(int *delcount) {
+int rib_ll_remove_expired_entries(const rip_timers_t *timers, int *delcount) {
 
 	time_t now = time(NULL);
-	time_t expiration_time = now - RIP_ROUTE_TIMEOUT;
-	time_t gc_time = now - RIP_ROUTE_GC_TIMEOUT;
+	time_t expiration_time = now - timers->route_invalid;
+	time_t gc_time = now - timers->route_flush;
 	rib_ll_node_t *cur = head;
 	rib_ll_node_t *last = head;
 	rib_ll_node_t *delnode;

@@ -410,7 +410,7 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		// Set Metric = 16 for routes that have exceeded their time to live
 		// TODO: Actually implement a deletion function:
 		delcount = 0;
-		(*xripd_settings->xripd_rib->remove_expired_entries)(&delcount);
+		(*xripd_settings->xripd_rib->remove_expired_entries)(&(xripd_settings->rip_timers), &delcount);
 		xripd_settings->xripd_rib->size -= delcount;
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "[rib]: RIB Size: %d\n", xripd_settings->xripd_rib->size);

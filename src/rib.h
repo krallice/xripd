@@ -67,7 +67,7 @@ typedef struct xripd_rib_t {
 	// Function pointers for underlying datastore implementations:
 	int (*add_to_rib)(int*, const rib_entry_t*, rib_entry_t*, rib_entry_t*, int*);
 	int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
-	int (*remove_expired_entries)(int*);
+	int (*remove_expired_entries)(const rip_timers_t*, int*);
 	int (*dump_rib)();
 	int (*serialise_rib)(char *buf, const uint32_t *count);
 	void (*destroy_rib)();

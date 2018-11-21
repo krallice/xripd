@@ -14,7 +14,7 @@ int rib_null_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t
 	return 0;
 }
 
-int rib_null_remove_expired_entries(int *delroute) {
+int rib_null_remove_expired_entries(const rip_timers_t *timers, int *delroute) {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[null]: Removing Expired Entries.\n");
 #endif

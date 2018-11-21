@@ -29,7 +29,7 @@ int rib_ll_init();
 int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route, int *rib_inc);
 
 // Expire out old entries out of the rib:
-int rib_ll_remove_expired_entries(int *delroute);
+int rib_ll_remove_expired_entries(const rip_timers_t *timers, int *delroute);
 
 // Traverse datastructure for RIB_ORIGIN_LOCAL routes
 // which have a recv_time timestamp NOT EQUAL to the last netlink run
