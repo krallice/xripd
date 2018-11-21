@@ -10,6 +10,18 @@ static struct rip_msg_header_t ripv2_update_header = {
 	.zero = 0
 }; 
 
+// Init our statically allocated global variable (rip_update_datagram):
+static void init_update_datagram(void) {
+
+	// Zeroise our statically allocated datagram:
+	memset(&rip_update_datagram, 0, sizeof(rip_update_datagram));
+
+	// Copy the update header to the header of the packet:
+	memcpy(&rip_update_datagram, &ripv2_update_header, sizeof(ripv2_update_header));
+
+	return;
+}
+
 // Given a sun_addresses_t struct, Populate our daemon and rib addresses, bind to the daemon address
 // for an Abtract Unix Domain Socket
 static int init_abstract_unix_socket(sun_addresses_t *s) {
@@ -54,9 +66,13 @@ failed_socket_init:
 }
 
 // Send datagram onto the network:
-static int fire_ripv2_update_datagram(const xripd_settings_t *xripd_settings) {
+static int fire_ripv2_update_datagram(const xripd_settings_t *xripd_settings, const int n) {
 
 	int ret = 0;
+
+	// Calculate size of datagram
+	// Header + n * message entries:
+	int size = (sizeof(rip_msg_header_t)) + (n * sizeof(rip_msg_entry_t));
 
 	// Declare destination address:
 	struct sockaddr_in dest;
@@ -66,12 +82,12 @@ static int fire_ripv2_update_datagram(const xripd_settings_t *xripd_settings) {
 	dest.sin_family = AF_INET;
 	dest.sin_addr.s_addr = inet_addr(RIP_MCAST_IP);
 	dest.sin_port = htons(RIP_UDP_PORT);
-	
-	// char msg[2] = "Z";
 
-	ret = sendto(xripd_settings->sd, rip_update_datagram, sizeof(rip_update_datagram), 0, (struct sockaddr *) &dest, sizeof(dest));
+	ret = sendto(xripd_settings->sd, rip_update_datagram, size, 0, (struct sockaddr *) &dest, sizeof(dest));
 	fprintf(stderr, "[xripd-out]: ____ RET ____ == %d\n", ret);
 
+	// Reset our init datagram:
+	init_update_datagram();
 	return 0;
 }
 
@@ -84,25 +100,34 @@ static int format_ripv2_update_datagram(const xripd_settings_t *xripd_settings, 
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[xripd-out]: RIB Entry %d / %d\n", entry_num, XRIPD_ENTRIES_PER_UPDATE);
 #endif
-
 	// If the caller has *NOT* told us to force send the datagram:
 	if ( force_send == 0 ) {
 
-		//
-		// Todo: Do something with the rib_entry
-		//
-		
+		fprintf(stderr, "[xripd-out]: KRALLICE: ENTRY_NUM: %d AFI_INET: %d\n", entry_num, rib_entry->rip_msg_entry.afi);
+
+		// Offset for packing rip_msg_entry_t's into the rip datagram:
+		int offset = 0;
+		if ( entry_num > 0 ) {
+			offset = entry_num - 1;
+		}
+
+		// Copy rib_entry into the appropriate space within the datagram
+		uint8_t *update = rip_update_datagram;
+		//memcpy((update + sizeof(ripv2_update_header) + ((offset - 1) * sizeof(rip_msg_entry_t))), 
+		memcpy((update + ((sizeof(rip_msg_header_t) + (offset * sizeof(rip_msg_entry_t))))), 
+				&(rib_entry->rip_msg_entry), sizeof(rip_msg_entry_t));
+
 		// Pack up to XRIPD_ENTRIES_PER_UPDATE into a single datagram, if we have hit the limit, fire the packet
 		// onto the network:
 		if ( (entry_num != 0 ) && (entry_num % XRIPD_ENTRIES_PER_UPDATE == 0) ) {
 			fprintf(stderr, "[xripd-out]: FIRE!!!\n");
-			fire_ripv2_update_datagram(xripd_settings);
+			fire_ripv2_update_datagram(xripd_settings, entry_num);
 		}
 
 	// Caller has asked us to sent the datagram onto the network regardless, send it:
 	} else if ( force_send == 1 ) {
 		fprintf(stderr, "[xripd-out]: FIRE!!!\n");
-		fire_ripv2_update_datagram(xripd_settings);
+		fire_ripv2_update_datagram(xripd_settings, entry_num);
 	}
 
 	return 0;
@@ -220,18 +245,6 @@ static void send_ctl_request(const xripd_settings_t *xripd_settings, const sun_a
 	sendto(sun_addresses->socketfd, &rib_control_header, sizeof(rib_control_header), 
 		0, (struct sockaddr *) &(sun_addresses->sockaddr_un_rib), sizeof(struct sockaddr_un));
 }
-
-static void init_update_datagram(void) {
-
-	// Zeroise our statically allocated datagram:
-	memset(&rip_update_datagram, 0, sizeof(rip_update_datagram));
-
-	// Copy the update header to the header of the packet:
-	memcpy(&rip_update_datagram, &ripv2_update_header, sizeof(ripv2_update_header));
-
-	return;
-}
-
 
 // Main control loop:
 static void main_loop(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses){
