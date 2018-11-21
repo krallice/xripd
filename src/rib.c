@@ -239,9 +239,9 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, const struct nlmsgh
 		route_attribute = RTA_NEXT(route_attribute, len);
 	}
 
-	in_entry.rip_msg_entry.afi = AF_INET;
-	in_entry.rip_msg_entry.metric = 0;
-	in_entry.recv_from.sin_addr.s_addr = 0; 
+	in_entry.rip_msg_entry.afi = htons(AF_INET);
+	in_entry.rip_msg_entry.metric = htonl(0);
+	in_entry.recv_from.sin_addr.s_addr = htonl(0); 
 	in_entry.rip_msg_entry.tag = 0;
 	in_entry.recv_time = (*xripd_settings->xripd_rib).last_local_poll;
 	in_entry.origin = RIB_ORIGIN_LOCAL;

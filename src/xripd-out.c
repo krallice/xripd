@@ -91,6 +91,18 @@ static int fire_ripv2_update_datagram(const xripd_settings_t *xripd_settings, co
 	return 0;
 }
 
+// Increment the metric of the route before advertising over the network:
+static void increment_rip_msg_entry_metric(rib_entry_t *r) { 
+
+	uint32_t m = ntohl(r->rip_msg_entry.metric);
+	if ( m < RIP_METRIC_INFINITY ) {
+		m++;
+	} else {
+		m = RIP_METRIC_INFINITY;
+	}
+	r->rip_msg_entry.metric = htonl(m);
+}
+
 // Given an input of a rib entry, and an entry_num, place the entry into a rip update datagram
 // Use the memory space allocated out of the static/global area of the exe
 // Place up to XRIPD_ENTRIES_PER_UPDATE entries into a single datagram
@@ -100,20 +112,23 @@ static int format_ripv2_update_datagram(const xripd_settings_t *xripd_settings, 
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[xripd-out]: RIB Entry %d / %d\n", entry_num, XRIPD_ENTRIES_PER_UPDATE);
 #endif
+
+	// Offset for packing rip_msg_entry_t's into the rip datagram:
+	int offset = 0;
+	if ( entry_num > 0 ) {
+		offset = (entry_num - 1) % XRIPD_ENTRIES_PER_UPDATE;
+	}
+
 	// If the caller has *NOT* told us to force send the datagram:
 	if ( force_send == 0 ) {
 
-		fprintf(stderr, "[xripd-out]: KRALLICE: ENTRY_NUM: %d AFI_INET: %d\n", entry_num, rib_entry->rip_msg_entry.afi);
 
-		// Offset for packing rip_msg_entry_t's into the rip datagram:
-		int offset = 0;
-		if ( entry_num > 0 ) {
-			offset = entry_num - 1;
-		}
+		// Increment metric safely:
+		increment_rip_msg_entry_metric(rib_entry);
 
+		// Pointer magic
 		// Copy rib_entry into the appropriate space within the datagram
 		uint8_t *update = rip_update_datagram;
-		//memcpy((update + sizeof(ripv2_update_header) + ((offset - 1) * sizeof(rip_msg_entry_t))), 
 		memcpy((update + ((sizeof(rip_msg_header_t) + (offset * sizeof(rip_msg_entry_t))))), 
 				&(rib_entry->rip_msg_entry), sizeof(rip_msg_entry_t));
 
@@ -121,13 +136,13 @@ static int format_ripv2_update_datagram(const xripd_settings_t *xripd_settings, 
 		// onto the network:
 		if ( (entry_num != 0 ) && (entry_num % XRIPD_ENTRIES_PER_UPDATE == 0) ) {
 			fprintf(stderr, "[xripd-out]: FIRE!!!\n");
-			fire_ripv2_update_datagram(xripd_settings, entry_num);
+			fire_ripv2_update_datagram(xripd_settings, offset + 1);
 		}
 
 	// Caller has asked us to sent the datagram onto the network regardless, send it:
 	} else if ( force_send == 1 ) {
-		fprintf(stderr, "[xripd-out]: FIRE!!!\n");
-		fire_ripv2_update_datagram(xripd_settings, entry_num);
+		fprintf(stderr, "[xripd-out]: FORCE FIRE ENTRY: %d!!!\n", entry_num);
+		fire_ripv2_update_datagram(xripd_settings, offset + 1);
 	}
 
 	return 0;
@@ -209,7 +224,6 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 						fprintf(stderr, "[xripd-out]: Successfully received RIB_CTRL_MSGTYPE_ENDREPLY\n");
 						fprintf(stderr, "[xripd-out]: Route Count Received: %d\n", recv_count);
 #endif
-						format_ripv2_update_datagram(xripd_settings, recv_count, NULL, 1);
 						retry_count = max_retries;
 
 					// We've recieved something unexpected, let's try again to either read more REPLY messages
