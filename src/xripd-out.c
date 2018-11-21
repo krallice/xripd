@@ -84,7 +84,9 @@ static int fire_ripv2_update_datagram(const xripd_settings_t *xripd_settings, co
 	dest.sin_port = htons(RIP_UDP_PORT);
 
 	ret = sendto(xripd_settings->sd, rip_update_datagram, size, 0, (struct sockaddr *) &dest, sizeof(dest));
-	fprintf(stderr, "[xripd-out]: ____ RET ____ == %d\n", ret);
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[xripd-out]: Sent RIPv2 UPDATE Message to %s (%d bytes).\n", RIP_MCAST_IP, ret);
+#endif
 
 	// Reset our init datagram:
 	init_update_datagram();
@@ -109,19 +111,16 @@ static void increment_rip_msg_entry_metric(rib_entry_t *r) {
 // If force_send is set, fire off the datagram immediately
 static int format_ripv2_update_datagram(const xripd_settings_t *xripd_settings, const int entry_num, rib_entry_t *rib_entry, int force_send) {
 
-#if XRIPD_DEBUG == 1
-	fprintf(stderr, "[xripd-out]: RIB Entry %d / %d\n", entry_num, XRIPD_ENTRIES_PER_UPDATE);
-#endif
-
 	// Offset for packing rip_msg_entry_t's into the rip datagram:
 	int offset = 0;
 	if ( entry_num > 0 ) {
 		offset = (entry_num - 1) % XRIPD_ENTRIES_PER_UPDATE;
 	}
-
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[xripd-out]: Packing RIP Message #%d into Datagram Position %d/%d\n", entry_num, offset + 1, XRIPD_ENTRIES_PER_UPDATE);
+#endif
 	// If the caller has *NOT* told us to force send the datagram:
 	if ( force_send == 0 ) {
-
 
 		// Increment metric safely:
 		increment_rip_msg_entry_metric(rib_entry);
@@ -135,16 +134,22 @@ static int format_ripv2_update_datagram(const xripd_settings_t *xripd_settings, 
 		// Pack up to XRIPD_ENTRIES_PER_UPDATE into a single datagram, if we have hit the limit, fire the packet
 		// onto the network:
 		if ( (entry_num != 0 ) && (entry_num % XRIPD_ENTRIES_PER_UPDATE == 0) ) {
-			fprintf(stderr, "[xripd-out]: FIRE!!!\n");
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[xripd-out]: Datagram full of entries (%d/%d). Preparing to send RIPv2 UPDATE Message.\n", offset + 1, XRIPD_ENTRIES_PER_UPDATE);
+#endif
 			fire_ripv2_update_datagram(xripd_settings, offset + 1);
 		}
 
 	// Caller has asked us to sent the datagram onto the network regardless, send it:
 	} else if ( force_send == 1 ) {
-		fprintf(stderr, "[xripd-out]: FORCE FIRE ENTRY: %d!!!\n", entry_num);
-		fire_ripv2_update_datagram(xripd_settings, offset + 1);
-	}
 
+		if ( entry_num != 1 ) {
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[xripd-out]: Datagram not full (%d/%d). Force sending RIPv2 UPDATE Message.\n", offset + 1, XRIPD_ENTRIES_PER_UPDATE);
+#endif
+			fire_ripv2_update_datagram(xripd_settings, offset + 1);
+		}
+	}
 	return 0;
 }
 
@@ -224,6 +229,7 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 						fprintf(stderr, "[xripd-out]: Successfully received RIB_CTRL_MSGTYPE_ENDREPLY\n");
 						fprintf(stderr, "[xripd-out]: Route Count Received: %d\n", recv_count);
 #endif
+						format_ripv2_update_datagram(xripd_settings, recv_count, NULL, 1);
 						retry_count = max_retries;
 
 					// We've recieved something unexpected, let's try again to either read more REPLY messages
@@ -255,7 +261,9 @@ static void send_ctl_request(const xripd_settings_t *xripd_settings, const sun_a
 	rib_control_header.msgtype = RIB_CTL_HDR_MSGTYPE_REQUEST;
 
 	// Fire off request to rib process:
+#if XRIPD_DEBUG == 1
 	fprintf(stderr, "[xripd-out]: Sending RIB_CTRL_MSGTYPE_REQUEST to xripd-rib.\n");
+#endif
 	sendto(sun_addresses->socketfd, &rib_control_header, sizeof(rib_control_header), 
 		0, (struct sockaddr *) &(sun_addresses->sockaddr_un_rib), sizeof(struct sockaddr_un));
 }
