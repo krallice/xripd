@@ -320,8 +320,14 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	int delcount = 0;
 
 	// Spawn our rib_out thread:
-	pthread_t ribout_thread;
-	pthread_create(&ribout_thread, NULL, &rib_out_spawn, (void *)xripd_settings);
+	if ( xripd_settings->passive_mode != XRIPD_PASSIVE_MODE_ENABLE ) {
+		pthread_t ribout_thread;
+		pthread_create(&ribout_thread, NULL, &rib_out_spawn, (void *)xripd_settings);
+	} else {
+#if XRIPD_DEBUG == 1
+		fprintf(stderr, "[rib]: Passive mode enabled. No socket communication with the daemon.\n");
+#endif
+	}
 
 	//rib_test_filter_init(xripd_settings->xripd_rib);
 

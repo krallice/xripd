@@ -30,6 +30,9 @@
 
 #define XRIPD_ENTRIES_PER_UPDATE 4
 
+#define XRIPD_PASSIVE_MODE_DISABLE 0x00
+#define XRIPD_PASSIVE_MODE_ENABLE 0x01
+
 // RIP Protocol Defines:
 #define RIP_MCAST_IP "224.0.0.9"
 #define RIP_UDP_PORT 520
@@ -82,6 +85,8 @@ typedef struct xripd_settings_t {
 	// Sockets:
 	uint8_t sd; 			// Socket Descriptor (for inbound RIP Packets)
 	uint8_t nlsd;			// Netlink Socket Descriptor (for route table manipulation)
+
+	uint8_t passive_mode;
 	
 	// Interfaces:
 	char iface_name[IFNAMSIZ]; 	// Human String for an interface, ie. "eth3" or "enp0s3"

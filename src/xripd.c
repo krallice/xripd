@@ -219,12 +219,13 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 // Print usage and pass exit status on:
 static void print_usage(int ret) {
 
-	fprintf(stderr, "usage: xripd [-h] [-bw <filename>] -i <interface>\n");
+	fprintf(stderr, "usage: xripd [-h] [-bw <filename>] [-p] -i <interface>\n");
 
 	fprintf(stderr, "params:\n");
        	fprintf(stderr, "\t-i <interface>\t Bind RIP daemon to network interface\n");
        	fprintf(stderr, "\t-b\t\t Read Blacklist from <filename>\n");
        	fprintf(stderr, "\t-w\t\t Read Whielist from <filename>\n");
+       	fprintf(stderr, "\t-p\t\t Enable Passive Mode (Don't generate RIPv2 Messages onto the network)\n");
        	fprintf(stderr, "\t-h\t\t Display this help message\n");
 	fprintf(stderr, "filter:\n");
        	fprintf(stderr, "\t - filter file may contain zero or more routes to be white/blacklisted from the RIB\n");
@@ -239,7 +240,7 @@ static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) 
 	int option_index = 0;
 	int index_count = 0;
 
-	while ((option_index = getopt(*argc, argv, "i:b:w:h")) != -1) {
+	while ((option_index = getopt(*argc, argv, "i:b:w:hp")) != -1) {
 		switch(option_index) {
 			case 'i':
 				strcpy(xripd_settings->iface_name, optarg);
@@ -251,6 +252,9 @@ static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) 
 			case 'w':
 				xripd_settings->filter_mode = XRIPD_FILTER_MODE_WHITELIST;
 				strcpy(xripd_settings->filter_file, optarg);
+				break;
+			case 'p':
+				xripd_settings->passive_mode = XRIPD_PASSIVE_MODE_ENABLE;
 				break;
 			case 'h':
 				print_usage(0);
@@ -337,8 +341,14 @@ int main(int argc, char **argv) {
 		// Spawn our secondary thread that:
 		// 	+ Listens on an Abstract Unix Domain Socket 
 		// 	+ Is responsible for sending RIPv2 Messages on the wire
-		pthread_t xripd_out_thread;
-		pthread_create(&xripd_out_thread, NULL, &xripd_out_spawn, (void *)xripd_settings);
+		if ( xripd_settings->passive_mode == XRIPD_PASSIVE_MODE_DISABLE ) {
+			pthread_t xripd_out_thread;
+			pthread_create(&xripd_out_thread, NULL, &xripd_out_spawn, (void *)xripd_settings);
+		} else {
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[daemon]: Passive Mode Enabled. No advertisements will be made onto the network.\n");
+#endif
+		}
 
 		// Main Listening Loop
 		xripd_listen_loop(xripd_settings);
