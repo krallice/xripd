@@ -50,6 +50,12 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 	int len = 0;
 	int retval = 0;
 
+	int msgnum = 0;
+
+	// Used for sending the route through our filter:
+	uint32_t ip = 0;
+	uint32_t netmask = 0;
+
 	// rib_ctl_reply struct:
 	struct rib_ctl_reply {
 		rib_ctl_hdr_t header;
@@ -72,16 +78,32 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 		// Iterate over the buffer:
 		for ( int i = 0; i < len; i++ ) {
 
+			// Pass route through our filter (if it is configured):
+			if ( xripd_settings->filter_mode != XRIPD_FILTER_MODE_NULL ) {
+
+				// Pointer magic:
+				ip = ((rib_entry_t *)(buf + (i * sizeof(rib_entry_t))))->rip_msg_entry.ipaddr;
+				netmask = ((rib_entry_t *)(buf + (i * sizeof(rib_entry_t))))->rip_msg_entry.subnet;
+
+				// If the route does not pass through the filter, continue onto the next route:
+				if ( filter_route(xripd_settings->xripd_rib->filter, ip, 
+					netmask) != XRIPD_FILTER_RESULT_ALLOW ) {
+#if XRIPD_DEBUG == 1
+					fprintf(stderr, "[rib-out]: Filtered route from being sent via RIB_CTL_HDR_MSGTYPE_REPLY\n");
+#endif
+					continue;
+				}
+			}
+
 			// Add entry to reply struct:
 			memcpy(&(ctl_reply.entry), (rib_entry_t*)(buf + (i * sizeof(rib_entry_t))), sizeof(rib_entry_t));
-			
-			//ctl_reply.entry = (rib_entry_t*)(buf + (i * sizeof(rib_entry_t)));
 			
 			// Send reply via socket back to the daemon:
 			retval = sendto(sun_addresses->socketfd, &ctl_reply, sizeof(ctl_reply), 
 					0, (struct sockaddr *) &(sun_addresses->sockaddr_un_daemon), sizeof(struct sockaddr_un));
 #if XRIPD_DEBUG == 1
-			fprintf(stderr, "[rib-out]: Sent %d bytes in RIB_CTL_HDR_MSGTYPE_REPLY Msg No: %d\n", retval, i + 1);
+			msgnum++;
+			fprintf(stderr, "[rib-out]: Sent %d bytes in RIB_CTL_HDR_MSGTYPE_REPLY Msg No: %d\n", retval, msgnum);
 #endif
 		}
 
