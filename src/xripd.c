@@ -263,6 +263,7 @@ static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) 
 	return 0;
 }
 
+// Responsible for destroying our xripd_settings_t struct
 int destroy_xripd_settings(xripd_settings_t *xripd_settings) {
 
 	if ( xripd_settings != NULL ) {

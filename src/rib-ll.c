@@ -44,16 +44,21 @@ static int rib_ll_new_node(rib_ll_node_t *new, const rib_entry_t *in_entry, rib_
 	return 0;
 }
 
+// Destroy/Dealloc our rib:
 void rib_ll_destroy_rib() { 
+	
+	// If we have not init'd our memory, do nothing:
+	if ( head != NULL ) {
 
-	rib_ll_node_t *cur = head;
-	rib_ll_node_t *next = cur->next;
+		rib_ll_node_t *cur = head;
+		rib_ll_node_t *next = cur->next;
 
-	// Iterate over linked list:
-	while ( cur != NULL ) {
-		free(cur);
-		cur = next;
-		next = cur->next;
+		// Iterate over linked list:
+		while ( cur != NULL ) {
+			free(cur);
+			cur = next;
+			next = cur->next;
+		}
 	}
 }
 
