@@ -21,8 +21,8 @@
 
 // Used for Pre-emptive route changes, advertised gratituiously from 
 // rib to daemon. ENDPREEMPT will signify end of stream
-#define RIB_CTL_HDR_MSGTYPE_PREEMPT 0x32
-#define RIB_CTL_HDR_MSGTYPE_ENDPREEMPT 0x33
+#define RIB_CTL_HDR_MSGTYPE_UNSOLICITED 0x32
+#define RIB_CTL_HDR_MSGTYPE_ENDUNSOLICITED 0x33
 
 // Maximum amount of rib_entry_t messages to carry in a single stream:
 #define RIB_CTL_MAX_BUFFER 8
