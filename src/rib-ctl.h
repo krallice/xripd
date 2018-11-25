@@ -11,8 +11,11 @@
 // For extensibility:
 #define RIB_CTL_HDR_VERSION_1 0x01
 
-// Daemon REQUEST routing table dump from rib:
+// Daemon REQUEST routing table dump from rib (timer generated)
 #define RIB_CTL_HDR_MSGTYPE_REQUEST 0x11
+
+// Daemon REQUEST routing table dump from rib (RIPv2 REQUEST triggered):
+#define RIB_CTL_HDR_MSGTYPE_REQUESTALL 0x1A
 
 // In reponse to REQUEST, rib will return REPLY messages
 // ENDREPLY messages will signify end of response stream
@@ -23,6 +26,7 @@
 // rib to daemon. ENDPREEMPT will signify end of stream
 #define RIB_CTL_HDR_MSGTYPE_UNSOLICITED 0x32
 #define RIB_CTL_HDR_MSGTYPE_ENDUNSOLICITED 0x33
+
 
 // Maximum amount of rib_entry_t messages to carry in a single stream:
 #define RIB_CTL_MAX_BUFFER 8

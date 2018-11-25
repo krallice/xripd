@@ -269,7 +269,7 @@ static void send_ctl_request(const xripd_settings_t *xripd_settings, const sun_a
 }
 
 // Main control loop:
-static void main_loop(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses){
+static void main_loop(xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses){
 
 	// Used to calculate when to generate the next rib ctl REQUEST message:
 	time_t next_request_time = 0;
@@ -308,6 +308,20 @@ static void main_loop(const xripd_settings_t *xripd_settings, const sun_addresse
 			if (sret > 0) {
 				parse_rib_ctl_msgs(xripd_settings, sun_addresses);
 			}
+
+			// Access shared memory from parent (daemon) thread. If it's recently received a 
+			// RIPv2 REQUEST Message, it will set the flag to 1.
+			// If the valuie is one, send a rib_ctl message to the daemon to do a full routing table
+			// dump, and then reset back to zero
+			pthread_mutex_lock(&(xripd_settings->daemon_shared.mutex_request_flag));
+			if ( xripd_settings->daemon_shared.request_flag == 1 ) {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "[xripd-out]: request_flag was set to 1 by daemon. Dumping Rib ...\n");
+#endif
+				send_ctl_request(xripd_settings, sun_addresses);
+				xripd_settings->daemon_shared.request_flag = 0;
+			}
+			pthread_mutex_unlock(&(xripd_settings->daemon_shared.mutex_request_flag));
 		}
 	}
 }

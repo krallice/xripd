@@ -123,6 +123,9 @@ static xripd_settings_t *init_xripd_settings() {
 	xripd_settings->xripd_rib = NULL;
 	xripd_settings->filter_mode = XRIPD_FILTER_MODE_NULL; // Default Value
 
+	// Init our daemon mutex:
+	pthread_mutex_init(&(xripd_settings->daemon_shared.mutex_request_flag), NULL);
+
 	return xripd_settings;
 }
 
@@ -206,7 +209,8 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 						inet_ntop(AF_INET, &rip_entry->subnet, subnet, sizeof(subnet));
 						inet_ntop(AF_INET, &rip_entry->nexthop, nexthop, sizeof(nexthop));
 
-						fprintf(stderr, "[daemon]:\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
+						fprintf(stderr, "[daemon]:\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", 
+								ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
 #endif
 
 						if (send_to_rib(xripd_settings, rip_entry, source_address) != 0) {
@@ -216,6 +220,25 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 						}
 						i += RIP_ENTRY_SIZE;
 					}
+				} else if ( msg_header->command == RIP_HEADER_REQUEST ) {
+#if XRIPD_DEBUG == 1
+					fprintf(stderr, "[daemon]: RIPv2 REQUEST Message Received\n");
+#endif
+					// Ignore if we are being quiet:
+					if (xripd_settings->passive_mode == XRIPD_PASSIVE_MODE_ENABLE ) {
+						continue;
+					}
+
+					// Set request_flag safely using mutexes. rib_ctl/speaker thread, will check this
+					// and this is will trigger a full routing table update over the network
+					// Specific route updates are not supported:
+					pthread_mutex_lock(&(xripd_settings->daemon_shared.mutex_request_flag));
+					if (xripd_settings->daemon_shared.request_flag != 1) {
+						xripd_settings->daemon_shared.request_flag = 1;
+					}
+					pthread_mutex_unlock(&(xripd_settings->daemon_shared.mutex_request_flag));
+
+
 				} else {
 #if XRIPD_DEBUG == 1
 				fprintf(stderr, "[daemon]: Received unsupported RIP Command: %02X from %s\n", msg_header->command, source_address_p);

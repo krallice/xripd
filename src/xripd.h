@@ -51,8 +51,8 @@
 // RIP Entry Defines:
 #define RIP_AFI_INET 2
 
-// #define RIP_TIMER_UPDATE_DEFAULT 30
-#define RIP_TIMER_UPDATE_DEFAULT 5 
+#define RIP_TIMER_UPDATE_DEFAULT 60
+//#define RIP_TIMER_UPDATE_DEFAULT 5 
 #define RIP_TIMER_INVALID_DEFAULT 180 
 #define RIP_TIMER_HOLDDOWN_DEFAULT 180 
 #define RIP_TIMER_FLUSH_DEFAULT 200 
@@ -74,6 +74,15 @@ typedef struct rip_timers_t {
 	// Default 240s
 	uint16_t route_flush;
 } rip_timers_t;
+
+// Shared Memory Access between the 2 daemon threads, listener and speaker/rib_ctl:
+typedef struct daemon_shared_t {
+
+	// Have we recieved a RIPv2 REQUEST message?
+	pthread_mutex_t mutex_request_flag;
+	uint8_t request_flag;
+
+} daemon_shared_t;
 
 // Daemon Settings Structure:
 typedef struct xripd_settings_t {
@@ -99,6 +108,9 @@ typedef struct xripd_settings_t {
 
 	// Timers:
 	rip_timers_t rip_timers;
+
+	// Multithreading related structs:
+	daemon_shared_t daemon_shared;
 } xripd_settings_t;
 
 // https://tools.ietf.org/html/rfc2453
