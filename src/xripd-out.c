@@ -158,6 +158,7 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 
 	int len = 0; // Length of data: 
 	int recv_count = 0; // Count of recieved messages:
+	int send_count = 0; // Count of messages to send onto network
 
 	struct rib_ctl_reply {
 		rib_ctl_hdr_t header;
@@ -216,7 +217,21 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 						// handler function to pack it into our static rip_datagram variable
 						// Function may or may not place the packet onto the wire
 						ctl_reply = (*(struct rib_ctl_reply *)buf);
-						format_ripv2_update_datagram(xripd_settings, recv_count, &(ctl_reply.entry), 0);
+
+						// If Split Horizon logic is enabled, only advertise ORIGIN_LOCAL routes
+						// We can make this assumption based on the logic that xripd only supports 1 interface
+						// If it is ever extended to support 1+ interfaces, actual split horizon logic
+						// will need to be implemented:
+						if ( RIP_SPLIT_HORIZON_ENABLE ) {
+							if ( ctl_reply.entry.origin == RIB_ORIGIN_LOCAL ) {
+								send_count++;
+								format_ripv2_update_datagram(xripd_settings, recv_count, &(ctl_reply.entry), 0);
+							}
+						// If split horizon isnt enabled, place the route onto the network anyway:
+						} else {
+							send_count++;
+							format_ripv2_update_datagram(xripd_settings, recv_count, &(ctl_reply.entry), 0);
+						}
 				
 						// Read next packet, look at the header, and increment our count:
 						len = read(sun_addresses->socketfd, buf, sizeof(ctl_reply));
@@ -229,7 +244,7 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 						fprintf(stderr, "[xripd-out]: Successfully received RIB_CTRL_MSGTYPE_ENDREPLY\n");
 						fprintf(stderr, "[xripd-out]: Route Count Received: %d\n", recv_count);
 #endif
-						format_ripv2_update_datagram(xripd_settings, recv_count, NULL, 1);
+						format_ripv2_update_datagram(xripd_settings, send_count, NULL, 1);
 						retry_count = max_retries;
 
 					// We've recieved something unexpected, let's try again to either read more REPLY messages
@@ -237,7 +252,7 @@ static void parse_rib_ctl_msgs(const xripd_settings_t *xripd_settings, const sun
 					} else {
 #if XRIPD_DEBUG == 1
 						fprintf(stderr, "[xripd-out]: ENDREPLY not Recieved, Ignoring packet.\n");
-						fprintf(stderr, "[xripd-out]: Waiting further.%d\n", recv_count);
+						fprintf(stderr, "[xripd-out]: Waiting further.%d\n", send_count);
 #endif
 						len = read(sun_addresses->socketfd, buf, sizeof(ctl_reply));
 						retry_count++;

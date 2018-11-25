@@ -51,11 +51,14 @@
 // RIP Entry Defines:
 #define RIP_AFI_INET 2
 
-#define RIP_TIMER_UPDATE_DEFAULT 60
-//#define RIP_TIMER_UPDATE_DEFAULT 5 
+// RIP Timer Defaults:
+//#define RIP_TIMER_UPDATE_DEFAULT 60
+#define RIP_TIMER_UPDATE_DEFAULT 5 
 #define RIP_TIMER_INVALID_DEFAULT 180 
 #define RIP_TIMER_HOLDDOWN_DEFAULT 180 
 #define RIP_TIMER_FLUSH_DEFAULT 200 
+
+#define RIP_SPLIT_HORIZON_ENABLE 0x01
 
 typedef struct rip_timers_t {
 	
