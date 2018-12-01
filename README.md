@@ -32,33 +32,59 @@ I also wanted to build something where I could play with abstractions in C, and 
 
 ## Structure:
 
-The structure of xripd looks roughly like below:
+The original v1 *passive only* structure of xripd looked like:
 
 ```
-                        +---------------------------------------+
-       <------------+   |      rip_msg_entry_t                  |       rib_entry_t
-                    |   |       recv_from()                     |      recvfrom()
-RIP^2 UPDATE MSG +--+---v--------+   +    +--------------+------+-----+     +  +--------+
-network +--------> AF_INET SOCKET+--------> xripd daemon | daemon pthread------> AF_UNIX|
-                 +---------------+   |    +---+--+-------+------------+     |  +-+----^-+
-                                     |        |  |                          |    |    |
-                                     +        |  |                          |    |    | ABSTRACT
-                     +-----+      write()     |  | rib_entry_t              |    |    | UNIX
-                     |     <---------+-----------+                          |    |    | DOMAIN   rib_ctl_t 
-                     | a p |         |        |                             |    |    | SOCKET      messaging
-                     | n i |         |        | fork()                      |    |    | (DGRAMS)
-                     | o p |         +        |                             |    |    |
-                     | n e |      read()  +---v----------+------------+ sendto()-v----+-+
-                     |     +---------+---->  xripd rib   | rib pthread+-----+--> AF_UNIX|
-                     +-----+         |    +---+----------+------------+     |  +--------+
-                                     |        |    <-mutex_rib-> rib_entry_t|
-                                     +        |                             |
-  ROUTING        +---------------+  sendmsg() |  NLM_F_REQUEST              |
-   TABLE <-------+ NETLINK SOCKET<---+--------+                             |
-                 +---------------+   |                                      |
-                                     +                                      +
-                     kernel space        user space                           kernel space
+                               rip_msg_entry_t
+                                recv_from()
+RIPv2 UPDATE MSG +---------------+   |    +--------------+
+network +--------> AF_INET SOCKET+--------> xripd daemon |
+                 +---------------+   |    +---+--+-------+
+                                     |        |  |
+                                     |        |  |
+                     +-----+      write()     |  | rib_entry_t
+                     |     <---------+-----------+
+                     | a p |         |        |
+                     | n i |         |        | fork()
+                     | o p |         |        |
+                     | n e |      read()  +---v----------+
+                     |     +---------+---->  xripd rib   |
+                     +-----+         |    +---+----------+
+                                     |        |
+                                     |        |
+  ROUTING        +---------------+  sendmsg() |  NLM_F_REQUEST
+   TABLE <-------+ NETLINK SOCKET<---+--------+
+                 +---------------+   |
+                                     +
+                     kernel space        user space
+```
 
+The current v2 **active** structure of xripd looks like:
+```
+                                            sendto()
+    RIP^2 UPDATE MSG    +---------------------------------------+
+       <------------+   |      rip_msg_entry_t                  |    rib_ctl_hdr_t
+                    |   |       recv_from()                     |           +  '\0xripd-daemon'
+RIPv2 UPDATE MSG +--+---v--------+   +    +--------------+------+-----+     |  +--------+
+network +--------> AF_INET SOCKET+--------> xripd daemon | daemon pthread<-----> AF_UNIX|   ^
+                 +---------------+   |    +---+--+-------+------------+     |  +-+----^-+   |
+                                     |        |  | <-mutex_request_flag->   |    |    |     |
+                                     +        |  |                          |    |    |     +
+                     +-----+      write()     |  | rib_entry_t              |    |    |  rib_ctl
+                     |     <---------+-----------+                          |    |    |  messaging
+                     | a p |         |        |                             |    |    |     +
+                     | n i |         |        | fork()                      |    |    |     |
+                     | o p |         +        |                      rib_ctl_hdr_t    |     |
+                     | n e |      read()  +---v----------+------------+     |  +-v----+-+   |
+                     |     +---------+---->  xripd rib   | rib pthread<--------> AF_UNIX|   v
+                     +-----+         |    +---+----------+------------+     |  +--------+
+                                     |        | <- mutex_rib_lock ->        | '\0xripd-rib'
+                                     +        |                             |
+  ROUTING        +---------------+  sendmsg() |  NLM_F_REQUEST              | Abstract Unix
+   TABLE <-------+ NETLINK SOCKET<---+--------+                             | Domain Sockets
+                 +---------------+   |                                      |  (Datagrams)
+                                     +                                      +
+                     kernel space                   user space                kernel space
 ```
 The application is split into 2 seperate processes that are responsible for barely holding the whole thing together:
 
