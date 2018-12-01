@@ -32,8 +32,34 @@ I also wanted to build something where I could play with abstractions in C, and 
 
 ## Structure:
 
-The structure of xripd looks roughly like below:
+The original v1 *passive only* structure of xripd looked like:
 
+```
+                               rip_msg_entry_t
+                                recv_from()
+RIPv2 UPDATE MSG +---------------+   |    +--------------+
+network +--------> AF_INET SOCKET+--------> xripd daemon |
+                 +---------------+   |    +---+--+-------+
+                                     |        |  |
+                                     |        |  |
+                     +-----+      write()     |  | rib_entry_t
+                     |     <---------+-----------+
+                     | a p |         |        |
+                     | n i |         |        | fork()
+                     | o p |         |        |
+                     | n e |      read()  +---v----------+
+                     |     +---------+---->  xripd rib   |
+                     +-----+         |    +---+----------+
+                                     |        |
+                                     |        |
+  ROUTING        +---------------+  sendmsg() |  NLM_F_REQUEST
+   TABLE <-------+ NETLINK SOCKET<---+--------+
+                 +---------------+   |
+                                     +
+                     kernel space        user space
+```
+
+The current v2 **active** structure of xripd looks like:
 ```
                                             sendto()
     RIP^2 UPDATE MSG    +---------------------------------------+
