@@ -128,3 +128,7 @@ Things that might be good to play with in the future:
 + Support more than one network interface
 + Support more of the RIPv2 Spec (Not all optional features outlined in the RFC are implemented. REQUEST message handling is not completely RFC compliant, but good enough to work in my labs)
 + Rebuild with a sane design to actually solve the domain of rip and not just muck aroud wasting CPU cycles haha.
+
+## License:
+
+Licensed under the GPLv2 as per included LICENSE file.
