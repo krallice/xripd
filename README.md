@@ -26,7 +26,7 @@ I wanted to build something moderately useful that I can run within my home netw
 + Multiprocessing (fork()ing, POSIX threads, mutexes)
 + Abstractions in C
 
-The code itself is *stupidly over-engineered* as I wanted to pile in as many reasons to dive into unrequired complexity - A readable and performant RIP implementation is not really the point. I'm happy it works at all haha.
+The code itself is *stupidly over-engineered* as I wanted to pile in as many reasons to play with different things - A readable and performant RIP implementation is not really the point. I'm happy it works at all haha.
 
 I also wanted to build something where I could play with abstractions in C, and have a real-life requirement to implement several datastructures. A RIB is a good chance to play with good, and not so good, datastructures.
 
