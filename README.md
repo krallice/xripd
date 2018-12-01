@@ -70,7 +70,7 @@ There are two IPC channels between the two processes used for transferring data 
 #### Anonymous Pipe
 As a RIPv2 RESPONSE message is recieved by the daemon by another router, it unpacks the one-or-many rip_msg_entry_t's (aka routes) contained in the UDP datagram, converts these into our internal datastructure rib_entry_t, and sends them to the rib via an anonymouse pipe.
 
-A pipe provides a method of transferring a stream of bytes through the kernel between two processes. As the rib_entry_t struct is fixed in size, both processes read/write from the pipe in units of fixed units of rib_entry_t's byte size. This is a rudimentary way of message passing through a stream interface. Cool
+A pipe provides a method of transferring a stream of bytes through the kernel between two processes. As the rib_entry_t struct is fixed in size, both processes read/write from the pipe in units of rib_entry_t's fixed byte size. This is a rudimentary way of message passing through a stream interface. Cool.
 
 #### AF_UNIX DGRAMs (Control Plane)
 Ok so this one's a little more fun. I decided to play with Abstract Unix Domain Sockets to:
@@ -83,44 +83,48 @@ For instance, if the daemon recieves a RIPv2 REQUEST message, it will send a rib
 + Reply with zero or more datagrams packed with a RIB_CTL_HDR_REPLY header followed by a rib_entry_t route,
 + Finish the *stream* with a RIB_CTL_HDR_ENDREPLY.
 
-This will inform the daemon it can begin processing the data it has recieved. The basic *(and it really is, it's only 2 bytes ..)* rib_ctl header provides some sort of stream functionality to a datagram format. Pretty cool, never done that before.
+This will inform the daemon it can begin processing the data it has recieved. The basic *(and it really is, it's only 2 bytes ..)* rib_ctl header provides a sort of *stream* capability out of a datagram format. Essentially the opposite of the Pipe example. Pretty cool, never done that before.
 
 #### Mutexes and POSIX Threading
-I decided to spawn seperate threads in both the rib and daemon processes to handle the rib_ctl messaging. Muxtex locking therefore becomes required to ensure *consistency of data* as this throws order of execution prediction out the window. Manipulations of the RIB are protected by a blocking mutex to ensure inbound/outbound RIP messaging is consistent. I've never played with these before but they were fun, if not completely unrequired haha.
+I decided to spawn seperate threads in both the rib and daemon processes to handle the rib_ctl messaging. Muxtex locking therefore becomes required to ensure *consistency of data* as this throws order of execution prediction out the window. Manipulations of the RIB are protected by a blocking mutex to ensure inbound/outbound RIP messaging is consistent and nothing catches fire. I've never played with these before but they were fun, if not completely unrequired haha.
 
 ## RIB datastore:
 
 One of the other fun parts of this was abstracting away the implementation of the RIB to a series of function pointers:
 ```
     7         // Function pointers for underlying datastore implementations:
-    8         int (*add_to_rib)(int*, const rib_entry_t*, rib_entry_t*, rib_entr      y_t*, int*);
-    9         int (*invalidate_expired_local_routes)(); // Metric = 16 for old l      ocal routes that are no longer in the kernel table
+    8         int (*add_to_rib)(int*, const rib_entry_t*, rib_entry_t*, rib_entry_t*, int*);
+    9         int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
    10         int (*remove_expired_entries)(const rip_timers_t*, int*);
    11         int (*dump_rib)();
    12         int (*serialise_rib)(char *buf, const uint32_t *count);
    13         void (*destroy_rib)();
    14 
 ```
-This *interface* is alligned with an underlying implementation at compile time
-
+This *interface* is then alligned with an underlying implementation at compile time:
 ```
          } else if ( rib_datastore == XRIPD_RIB_DATASTORE_LINKEDLIST ) {
  12 
  11                 xripd_rib->add_to_rib = &rib_ll_add_to_rib;
  10                 xripd_rib->dump_rib = &rib_ll_dump_rib;
-  9                 xripd_rib->remove_expired_entries = &rib_ll_remove_expired_e    ntries;
-  8                 xripd_rib->invalidate_expired_local_routes = &rib_ll_invalid    ate_expired_local_routes;
+  9                 xripd_rib->remove_expired_entries = &rib_ll_remove_expired_entries;
+  8                 xripd_rib->invalidate_expired_local_routes = &rib_ll_invalidate_expired_local_routes;
   7                 xripd_rib->serialise_rib = &rib_ll_serialise_rib;
   6                 xripd_rib->destroy_rib = &rib_ll_destroy_rib;
 ```
+This has provided some room to play with different RIB implementations. To date, only one has been implemented:
 
++ An Unsorted Singularly Linked List (horribly inefficient but functioning..)
 
-## Next steps:
+Future planned datastructures include:
 
++ Some sort of B-Tree implementation (for overkill of complexity)
++ Some sort of hash of linked lists (probably the sweet spot of performance and complexity)
 
+## Future:
 
-## Improvements?
+Things that might be good to play with in the future:
+
 + Support more than one network interface
-+ Encapsulate logic into a state table design. Clean it up
-+ Replace the child/fork model with pthreading
-+ Replace the use of pipes with mutexed shared memory
++ Support more of the RIPv2 Spec (Not all optional features outlined in the RFC are implemented. REQUEST message handling is not completely RFC compliant, but good enough to work in my labs)
++ Rebuild with a sane design to actually solve the domain of rip and not just muck aroud wasting CPU cycles haha.
