@@ -71,7 +71,7 @@ static void send_rib_ctl_reply(xripd_settings_t *xripd_settings, const sun_addre
 
 	// Populate buffer with our rib in a serialised format, in a block of rib_entry_t's:
 	pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
-	len = xripd_settings->xripd_rib->serialise_rib(buf, &(xripd_settings->xripd_rib->size));
+	len = xripd_settings->xripd_rib->serialise_rib(buf, &(xripd_settings->xripd_rib->size), 0);
 	pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 	
 	// If we have a positive amount of rib entries (aka, there is some data within the rib)

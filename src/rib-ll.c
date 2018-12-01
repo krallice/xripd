@@ -100,7 +100,7 @@ static int rib_ll_node_compare(const rib_entry_t *in_entry, const rib_ll_node_t 
 
 // Given pointer to character buffer with a size (count * rib_entry_t)
 // Dump our rib into the buffer
-int rib_ll_serialise_rib(char *buf, const uint32_t *count) {
+int rib_ll_serialise_rib(char *buf, const uint32_t *count, const time_t local_change_time) {
 
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[l-list]: Recieved request to serialise RIB into byte sequence.\n");
@@ -110,16 +110,33 @@ int rib_ll_serialise_rib(char *buf, const uint32_t *count) {
 	rib_entry_t *cur_rib;
 	int index = 0;
 
-	// Ensure no overflow:
-	while ( (index <= *count) && cur != NULL  ) {
+	// If we want to return EVERY route:
+	if ( local_change_time == 0 ) {
 
-		cur_rib = (rib_entry_t*)(buf + (sizeof(rib_entry_t) * index));
-		memcpy(cur_rib, &(cur->entry), sizeof(rib_entry_t));
+		// Ensure no overflow:
+		while ( (index <= *count) && cur != NULL  ) {
 
-		index++;
-		cur = cur->next;
+			cur_rib = (rib_entry_t*)(buf + (sizeof(rib_entry_t) * index));
+			memcpy(cur_rib, &(cur->entry), sizeof(rib_entry_t));
+
+			index++;
+			cur = cur->next;
+		}
+		return index;
+
+	// If we want to return only recently changed local routes:	
+	} else {
+
+		while ( (index <= *count) && cur != NULL  ) {
+
+			cur_rib = (rib_entry_t*)(buf + (sizeof(rib_entry_t) * index));
+			memcpy(cur_rib, &(cur->entry), sizeof(rib_entry_t));
+
+			index++;
+			cur = cur->next;
+		}
+		return index;
 	}
-	return index;
 }
 
 // Evaluate in_entry against our current RIB

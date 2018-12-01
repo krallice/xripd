@@ -69,7 +69,7 @@ typedef struct xripd_rib_t {
 	int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
 	int (*remove_expired_entries)(const rip_timers_t*, int*);
 	int (*dump_rib)();
-	int (*serialise_rib)(char *buf, const uint32_t *count);
+	int (*serialise_rib)(char *buf, const uint32_t *count, const time_t local_change_time);
 	void (*destroy_rib)();
 
 } xripd_rib_t;

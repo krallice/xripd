@@ -35,7 +35,7 @@ int rib_null_dump_rib() {
 	return 0;
 }
 
-int rib_null_serialise_rib(char *buf, const uint32_t *count) {
+int rib_null_serialise_rib(char *buf, const uint32_t *count, const time_t local_change_time) {
 #if XRIPD_DEBUG == 1
 	fprintf(stderr, "[null]: Serialising RIB, Empty no surprise ...\n");
 #endif
