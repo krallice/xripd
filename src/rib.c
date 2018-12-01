@@ -421,7 +421,6 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 		
 		// Set Metric = 16 for routes that have exceeded their time to live
-		// TODO: Actually implement a deletion function:
 		delcount = 0;
 		pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 		(*xripd_settings->xripd_rib->remove_expired_entries)(&(xripd_settings->rip_timers), &delcount);
