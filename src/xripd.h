@@ -87,6 +87,14 @@ typedef struct daemon_shared_t {
 
 } daemon_shared_t;
 
+// Shared Memory Access between the 2 rib threads:
+typedef struct rib_shared_t {
+
+	// Lock access to the rib:
+	pthread_mutex_t mutex_rib_lock;
+
+} rib_shared_t;
+
 // Daemon Settings Structure:
 typedef struct xripd_settings_t {
 	
@@ -114,6 +122,8 @@ typedef struct xripd_settings_t {
 
 	// Multithreading related structs:
 	daemon_shared_t daemon_shared;
+	rib_shared_t rib_shared;
+
 } xripd_settings_t;
 
 // https://tools.ietf.org/html/rfc2453

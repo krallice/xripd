@@ -123,8 +123,9 @@ static xripd_settings_t *init_xripd_settings() {
 	xripd_settings->xripd_rib = NULL;
 	xripd_settings->filter_mode = XRIPD_FILTER_MODE_NULL; // Default Value
 
-	// Init our daemon mutex:
+	// Init our rib and daemon mutexes:
 	pthread_mutex_init(&(xripd_settings->daemon_shared.mutex_request_flag), NULL);
+	pthread_mutex_init(&(xripd_settings->rib_shared.mutex_rib_lock), NULL);
 
 	return xripd_settings;
 }
