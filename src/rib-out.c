@@ -45,7 +45,7 @@ failed_socket_init:
 
 // Send a serialise requeset to our rib, to return our routes into a buffer,
 // Send these via the 'rib_ctl' buffer back to the daemon via a reply message:
-static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
+static void send_rib_ctl_reply(xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
 
 	int len = 0;
 	int retval = 0;
@@ -70,8 +70,10 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 	char *buf = (char *)malloc(xripd_settings->xripd_rib->size * (sizeof(rib_entry_t)));
 
 	// Populate buffer with our rib in a serialised format, in a block of rib_entry_t's:
+	pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 	len = xripd_settings->xripd_rib->serialise_rib(buf, &(xripd_settings->xripd_rib->size));
-
+	pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
+	
 	// If we have a positive amount of rib entries (aka, there is some data within the rib)
 	if ( len != 0 ) {
 
@@ -125,7 +127,7 @@ static void send_rib_ctl_reply(const xripd_settings_t *xripd_settings, const sun
 
 // Main Listening Loop
 // Wait on the Unix Socket, parse the message type, and then dispatch appropriately:
-static void listen_loop(const xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
+static void listen_loop(xripd_settings_t *xripd_settings, const sun_addresses_t *sun_addresses) {
 
 	// Create a buffer that fits atleast 1 rib_ctl header and 1 rib entry:
 	int len = 0;

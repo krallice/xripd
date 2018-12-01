@@ -334,8 +334,10 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 
 	// To start with, add local routes to our RIB:
 #if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib]: Adding Local Kernel Routes to RIB\n");
+	fprintf(stderr, "[rib]: Locking RIB, Adding Local Kernel Routes to RIB\n");
 #endif
+
+	pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 	(*xripd_settings->xripd_rib).last_local_poll = time(NULL);
 	if ( netlink_add_local_routes_to_rib(xripd_settings) == 0 ) {
 #if XRIPD_DEBUG == 1
@@ -343,8 +345,10 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		(*xripd_settings->xripd_rib->dump_rib)();
 #endif
 	}
+	pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
+
 #if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib]: RIB Main Loop Started\n");
+	fprintf(stderr, "[rib]: Unlocking RIB, Main Loop Started\n");
 #endif
 	// Main loop.
 	// Start recieving routes from xripd-daemon picked up over the network:
@@ -391,11 +395,18 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 					// Pass route through filter, and if success, proceed with adding to rib/kernel:
 					if ( filter_route(xripd_settings->xripd_rib->filter, in_entry.rip_msg_entry.ipaddr, 
 						in_entry.rip_msg_entry.subnet) == XRIPD_FILTER_RESULT_ALLOW ) {
+
+						// Lock, Add Entry, Unlock:
+						pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 						add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
+						pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 					}
 				} else {
+				
 					// Don't worry about filter, process straight through our rib:
+					pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 					add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
+					pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 				}
 
 			// Select Timeout triggered, break out of loop:
@@ -405,24 +416,30 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		}
 
 		// Refresh RIB's view of local routes. Invalidate any routes that are no longer local in the RIB:
+		pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 		refresh_local_routes_into_rib(xripd_settings);
+		pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 		
 		// Set Metric = 16 for routes that have exceeded their time to live
 		// TODO: Actually implement a deletion function:
 		delcount = 0;
+		pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 		(*xripd_settings->xripd_rib->remove_expired_entries)(&(xripd_settings->rip_timers), &delcount);
+		pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 		xripd_settings->xripd_rib->size -= delcount;
+
 #if XRIPD_DEBUG == 1
 		fprintf(stderr, "[rib]: RIB Size: %d\n", xripd_settings->xripd_rib->size);
-#endif
-
 		// Dump our RIB only every 5th loop:
 		if ( (dump_count % 5) == 0 ) {
+			pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 			(*xripd_settings->xripd_rib->dump_rib)();
+			pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 			dump_count = 1;
 		} else {
 			++dump_count;
 		}
+#endif
 		entry_count = 0;
 	}
 }
