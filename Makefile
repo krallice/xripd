@@ -1,7 +1,7 @@
 CC=cc
 CFLAGS=-ansi -g -std=gnu99 -Wall
 
-LINKER=cc -o
+LINKER=cc -pthread -o
 LFLAGS=-Wall -I. -lm
 
 SRCDIR=src

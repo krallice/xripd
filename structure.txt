@@ -1,3 +1,6 @@
+################
+Passive Structure
+################
                                rip_msg_entry_t
                                 recv_from()
 RIPv2 UPDATE MSG +---------------+   |    +--------------+
@@ -20,3 +23,32 @@ network +--------> AF_INET SOCKET+--------> xripd daemon |
                  +---------------+   |
                                      +
                      kernel space        user space
+
+################
+Active Structure
+################
+
+                                            sendto()
+    RIP^2 UPDATE MSG    +---------------------------------------+
+       <------------+   |      rip_msg_entry_t                  |    rib_ctl_hdr_t
+                    |   |       recv_from()                     |           +  '\0xripd-daemon'
+RIPv2 UPDATE MSG +--+---v--------+   +    +--------------+------+-----+     |  +--------+
+network +--------> AF_INET SOCKET+--------> xripd daemon | daemon pthread<-----> AF_UNIX|   ^
+                 +---------------+   |    +---+--+-------+------------+     |  +-+----^-+   |
+                                     |        |  | <-mutex_request_flag->   |    |    |     |
+                                     +        |  |                          |    |    |     +
+                     +-----+      write()     |  | rib_entry_t              |    |    |  rib_ctl
+                     |     <---------+-----------+                          |    |    |  messaging
+                     | a p |         |        |                             |    |    |     +
+                     | n i |         |        | fork()                      |    |    |     |
+                     | o p |         +        |                      rib_ctl_hdr_t    |     |
+                     | n e |      read()  +---v----------+------------+     |  +-v----+-+   |
+                     |     +---------+---->  xripd rib   | rib pthread<--------> AF_UNIX|   v
+                     +-----+         |    +---+----------+------------+     |  +--------+
+                                     |        | <- mutex_rib_lock ->        | '\0xripd-rib'
+                                     +        |                             |
+  ROUTING        +---------------+  sendmsg() |  NLM_F_REQUEST              | Abstract Unix
+   TABLE <-------+ NETLINK SOCKET<---+--------+                             | Domain Sockets
+                 +---------------+   |                                      |  (Datagrams)
+                                     +                                      +
+                     kernel space                   user space                kernel space

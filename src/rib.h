@@ -2,6 +2,7 @@
 #define XRIPD_RIB_H
 
 #include "xripd.h"
+#include "rib-out.h"
 #include "filter-ll.h"
 
 // Standard Includes:
@@ -23,6 +24,8 @@
 
 // Select():
 #include <sys/select.h>
+
+#include <pthread.h>
 
 // Datastore implementation indexes
 // uint8_t value, 256 possible datastores:
@@ -59,11 +62,14 @@ typedef struct xripd_rib_t {
 	time_t last_local_poll; // Time of our last netlink poll. Used to sync our rib with our local routes (determined through netlink).
 	struct filter_t *filter; // Pointer to our filter struct for filtering routes in/out of the RIB
 
+	uint32_t size;
+
 	// Function pointers for underlying datastore implementations:
-	int (*add_to_rib)(int*, const rib_entry_t*, rib_entry_t*, rib_entry_t*);
-	int (*remove_expired_entries)();
+	int (*add_to_rib)(int*, const rib_entry_t*, rib_entry_t*, rib_entry_t*, int*);
 	int (*invalidate_expired_local_routes)(); // Metric = 16 for old local routes that are no longer in the kernel table
+	int (*remove_expired_entries)(const rip_timers_t*, int*);
 	int (*dump_rib)();
+	int (*serialise_rib)(char *buf, const uint32_t *count);
 	void (*destroy_rib)();
 
 } xripd_rib_t;

@@ -1,4 +1,5 @@
 #include "xripd.h"
+#include "xripd-out.h"
 #include "rib.h"
 #include "route.h"
 
@@ -58,6 +59,12 @@ static int init_socket(xripd_settings_t *xripd_settings) {
 		close(xripd_settings->sd);
 		fprintf(stderr, "[daemon]: Error, Unable to get IP Address of %s\n", xripd_settings->iface_name);
 		return 1;
+	} else {
+#if XRIPD_DEBUG == 1
+		xripd_settings->self_ip = *((struct sockaddr_in *)&ifrq.ifr_addr);
+		//fprintf(stderr, "__ MILES __ %s\n", inet_ntoa(((struct sockaddr_in *)&ifrq.ifr_addr)->sin_addr));
+		fprintf(stderr, "[daemon]: Self IP: %s\n", inet_ntoa(xripd_settings->self_ip.sin_addr));
+#endif
 	}
 
 	// Convert the presentation string for RIP_MCAST_IP into a network object:
@@ -100,15 +107,25 @@ static xripd_settings_t *init_xripd_settings() {
 	memset(xripd_settings, 0, sizeof(xripd_settings_t));
 
 	// Check interface string length, and copy if safe:
-	//if ( strlen(XRIPD_PASSIVE_IFACE) <= IFNAMSIZ ) {
-		//strcpy(xripd_settings->iface_name, XRIPD_PASSIVE_IFACE);
-	//} else {
-		//fprintf(stderr, "[daemon] Error, Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
-		//return NULL;
-	//}	
+	if ( strlen(XRIPD_PASSIVE_IFACE) <= IFNAMSIZ ) {
+		strcpy(xripd_settings->iface_name, XRIPD_PASSIVE_IFACE);
+	} else {
+		fprintf(stderr, "[daemon] Error, Interface string %s is too long, exceeding IFNAMSIZ\n", xripd_settings->iface_name);
+		return NULL;
+	}	
+
+	// Set Timers:
+	xripd_settings->rip_timers.route_update = RIP_TIMER_UPDATE_DEFAULT;
+	xripd_settings->rip_timers.route_invalid = RIP_TIMER_INVALID_DEFAULT;
+	xripd_settings->rip_timers.route_holddown = RIP_TIMER_HOLDDOWN_DEFAULT; // NOT YET IMPLEMENTED
+	xripd_settings->rip_timers.route_flush = RIP_TIMER_FLUSH_DEFAULT;
 	
 	xripd_settings->xripd_rib = NULL;
 	xripd_settings->filter_mode = XRIPD_FILTER_MODE_NULL; // Default Value
+
+	// Init our rib and daemon mutexes:
+	pthread_mutex_init(&(xripd_settings->daemon_shared.mutex_request_flag), NULL);
+	pthread_mutex_init(&(xripd_settings->rib_shared.mutex_rib_lock), NULL);
 
 	return xripd_settings;
 }
@@ -158,6 +175,15 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 			perror("recv");
 		} else {
 
+			// Protect against loops by NOT accepting traffic delivered to the daemon from itself:
+			// This is possible if the upstream switchport delivers multicast traffic back to the source port:
+			if ( xripd_settings->self_ip.sin_addr.s_addr == source_address.sin_addr.s_addr ) {
+#if XRIPD_DEBUG == 1
+				fprintf(stderr, "[daemon]: Saw self IP in datagram. Ignoring for loop prevention.\n");
+#endif
+				continue;
+			}
+
 			rip_msg_header_t *msg_header = (rip_msg_header_t *)receive_buffer;
 
 			char source_address_p[16];
@@ -184,7 +210,8 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 						inet_ntop(AF_INET, &rip_entry->subnet, subnet, sizeof(subnet));
 						inet_ntop(AF_INET, &rip_entry->nexthop, nexthop, sizeof(nexthop));
 
-						fprintf(stderr, "[daemon]:\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
+						fprintf(stderr, "[daemon]:\tRIPv2 Entry AFI: %02X IP: %s %s Next-Hop: %s Metric: %02d\n", 
+								ntohs(rip_entry->afi), ipaddr, subnet, nexthop, ntohl(rip_entry->metric));
 #endif
 
 						if (send_to_rib(xripd_settings, rip_entry, source_address) != 0) {
@@ -194,6 +221,25 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 						}
 						i += RIP_ENTRY_SIZE;
 					}
+				} else if ( msg_header->command == RIP_HEADER_REQUEST ) {
+#if XRIPD_DEBUG == 1
+					fprintf(stderr, "[daemon]: RIPv2 REQUEST Message Received\n");
+#endif
+					// Ignore if we are being quiet:
+					if (xripd_settings->passive_mode == XRIPD_PASSIVE_MODE_ENABLE ) {
+						continue;
+					}
+
+					// Set request_flag safely using mutexes. rib_ctl/speaker thread, will check this
+					// and this is will trigger a full routing table update over the network
+					// Specific route updates are not supported:
+					pthread_mutex_lock(&(xripd_settings->daemon_shared.mutex_request_flag));
+					if (xripd_settings->daemon_shared.request_flag != 1) {
+						xripd_settings->daemon_shared.request_flag = 1;
+					}
+					pthread_mutex_unlock(&(xripd_settings->daemon_shared.mutex_request_flag));
+
+
 				} else {
 #if XRIPD_DEBUG == 1
 				fprintf(stderr, "[daemon]: Received unsupported RIP Command: %02X from %s\n", msg_header->command, source_address_p);
@@ -212,12 +258,13 @@ static int xripd_listen_loop(xripd_settings_t *xripd_settings) {
 // Print usage and pass exit status on:
 static void print_usage(int ret) {
 
-	fprintf(stderr, "usage: xripd [-h] [-bw <filename>] -i <interface>\n");
+	fprintf(stderr, "usage: xripd [-h] [-bw <filename>] [-p] -i <interface>\n");
 
 	fprintf(stderr, "params:\n");
        	fprintf(stderr, "\t-i <interface>\t Bind RIP daemon to network interface\n");
        	fprintf(stderr, "\t-b\t\t Read Blacklist from <filename>\n");
        	fprintf(stderr, "\t-w\t\t Read Whielist from <filename>\n");
+       	fprintf(stderr, "\t-p\t\t Enable Passive Mode (Don't generate RIPv2 Messages onto the network)\n");
        	fprintf(stderr, "\t-h\t\t Display this help message\n");
 	fprintf(stderr, "filter:\n");
        	fprintf(stderr, "\t - filter file may contain zero or more routes to be white/blacklisted from the RIB\n");
@@ -232,7 +279,7 @@ static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) 
 	int option_index = 0;
 	int index_count = 0;
 
-	while ((option_index = getopt(*argc, argv, "i:b:w:h")) != -1) {
+	while ((option_index = getopt(*argc, argv, "i:b:w:hp")) != -1) {
 		switch(option_index) {
 			case 'i':
 				strcpy(xripd_settings->iface_name, optarg);
@@ -244,6 +291,9 @@ static int parse_args(xripd_settings_t *xripd_settings, int *argc, char **argv) 
 			case 'w':
 				xripd_settings->filter_mode = XRIPD_FILTER_MODE_WHITELIST;
 				strcpy(xripd_settings->filter_file, optarg);
+				break;
+			case 'p':
+				xripd_settings->passive_mode = XRIPD_PASSIVE_MODE_ENABLE;
 				break;
 			case 'h':
 				print_usage(0);
@@ -326,6 +376,18 @@ int main(int argc, char **argv) {
 		if ( init_socket(xripd_settings) != 0) {
 			kill(rib_f, SIGINT);
 			shutdown_process(xripd_settings, 1);
+		}
+
+		// Spawn our secondary thread that:
+		// 	+ Listens on an Abstract Unix Domain Socket 
+		// 	+ Is responsible for sending RIPv2 Messages on the wire
+		if ( xripd_settings->passive_mode == XRIPD_PASSIVE_MODE_DISABLE ) {
+			pthread_t xripd_out_thread;
+			pthread_create(&xripd_out_thread, NULL, &xripd_out_spawn, (void *)xripd_settings);
+		} else {
+#if XRIPD_DEBUG == 1
+			fprintf(stderr, "[daemon]: Passive Mode Enabled. No advertisements will be made onto the network.\n");
+#endif
 		}
 
 		// Main Listening Loop

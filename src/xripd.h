@@ -22,9 +22,16 @@
 #include <linux/if_arp.h>
 #include <arpa/inet.h>
 
+#include <pthread.h>
+
 // XRIPD Defines:
 #define XRIPD_PASSIVE_IFACE "enp0s8"
 #define XRIPD_DEBUG 0x01
+
+#define XRIPD_ENTRIES_PER_UPDATE 4
+
+#define XRIPD_PASSIVE_MODE_DISABLE 0x00
+#define XRIPD_PASSIVE_MODE_ENABLE 0x01
 
 // RIP Protocol Defines:
 #define RIP_MCAST_IP "224.0.0.9"
@@ -44,24 +51,79 @@
 // RIP Entry Defines:
 #define RIP_AFI_INET 2
 
-// RIP Variables
-#define RIP_ROUTE_TIMEOUT 45
-#define RIP_ROUTE_GC_TIMEOUT (int)(RIP_ROUTE_TIMEOUT + 120)
+// RIP Timer Defaults:
+//#define RIP_TIMER_UPDATE_DEFAULT 60
+#define RIP_TIMER_UPDATE_DEFAULT 5 
+#define RIP_TIMER_INVALID_DEFAULT 180 
+#define RIP_TIMER_HOLDDOWN_DEFAULT 180 
+#define RIP_TIMER_FLUSH_DEFAULT 200 
+
+#define RIP_SPLIT_HORIZON_ENABLE 0x01
+
+typedef struct rip_timers_t {
+	
+	// Update: Rate at which updates are sent:
+	uint16_t route_update;
+	
+	// Invalid: Interval at which the route is marked at Invalid (Metric == Infinity). Kept in RIB, but removed from Kernel table:
+	// Default: 180s Should be 3x Update
+	uint16_t route_invalid;
+
+	// Holddown TODO Implement: Amount of time the router will refuse to learn about the route from other addresses, only from the current router
+	// Default: 180s Should be 3x Update
+	uint16_t route_holddown;
+
+	// Flush: Amount of time that must pass before the route is removed completely from the routing table:
+	// Default 240s
+	uint16_t route_flush;
+} rip_timers_t;
+
+// Shared Memory Access between the 2 daemon threads, listener and speaker/rib_ctl:
+typedef struct daemon_shared_t {
+
+	// Have we recieved a RIPv2 REQUEST message?
+	pthread_mutex_t mutex_request_flag;
+	uint8_t request_flag;
+
+} daemon_shared_t;
+
+// Shared Memory Access between the 2 rib threads:
+typedef struct rib_shared_t {
+
+	// Lock access to the rib:
+	pthread_mutex_t mutex_rib_lock;
+
+} rib_shared_t;
 
 // Daemon Settings Structure:
 typedef struct xripd_settings_t {
+	
 	// Sockets:
 	uint8_t sd; 			// Socket Descriptor (for inbound RIP Packets)
 	uint8_t nlsd;			// Netlink Socket Descriptor (for route table manipulation)
+
+	uint8_t passive_mode;		// Enable Passive Flag (aka do not advertise on net)
+	struct sockaddr_in self_ip;	// Self IP of interface daemon is bound to. Do not accept inbound rip updates when source = self_ip (loop avoidance)
+	
 	// Interfaces:
 	char iface_name[IFNAMSIZ]; 	// Human String for an interface, ie. "eth3" or "enp0s3"
 	uint8_t iface_index; 		// Kernel index id for interface
+
 	// RIB:
 	struct xripd_rib_t *xripd_rib;		// Pointer to RIB
 	int p_rib_in[2];		// Pipe for Listener -> RIB
+	
 	// Filter:
 	char filter_file[64];		// Filename for the filterfile
 	uint8_t filter_mode;		// Whitelist or Blacklist?
+
+	// Timers:
+	rip_timers_t rip_timers;
+
+	// Multithreading related structs:
+	daemon_shared_t daemon_shared;
+	rib_shared_t rib_shared;
+
 } xripd_settings_t;
 
 // https://tools.ietf.org/html/rfc2453

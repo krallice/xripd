@@ -103,10 +103,34 @@ static int rib_ll_node_compare(const rib_entry_t *in_entry, const rib_ll_node_t 
 	}
 }
 
+// Given pointer to character buffer with a size (count * rib_entry_t)
+// Dump our rib into the buffer
+int rib_ll_serialise_rib(char *buf, const uint32_t *count) {
+
+#if XRIPD_DEBUG == 1
+	fprintf(stderr, "[l-list]: Recieved request to serialise RIB into byte sequence.\n");
+#endif
+
+	rib_ll_node_t *cur = head;
+	rib_entry_t *cur_rib;
+	int index = 0;
+
+	// Ensure no overflow:
+	while ( (index <= *count) && cur != NULL  ) {
+
+		cur_rib = (rib_entry_t*)(buf + (sizeof(rib_entry_t) * index));
+		memcpy(cur_rib, &(cur->entry), sizeof(rib_entry_t));
+
+		index++;
+		cur = cur->next;
+	}
+	return index;
+}
+
 // Evaluate in_entry against our current RIB
 // Potentially return ins_route and/or del_route as return rib_entry_t types
 // which are used to add/delete desired routes from the kernel table:
-int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
+int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route, int *rib_inc) {
 
 	rib_ll_node_t *cur = head;
 	rib_ll_node_t *last = head;
@@ -125,6 +149,7 @@ int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *
 			// Prepare ins_route, and return:
 			// copy_rib_entry(in_entry, ins_route);
 			memcpy(ins_route, in_entry, sizeof(rib_entry_t));
+			(*rib_inc)++;
 			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 			
@@ -194,6 +219,8 @@ int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *
 			// Prepare ins_route, and return:
 			//copy_rib_entry(in_entry, ins_route);
 			memcpy(ins_route, in_entry, sizeof(rib_entry_t));
+			// Route RIB Size increase by 1:
+			(*rib_inc)++;
 			*route_ret = RIB_RET_INSTALL_NEW;
 			return 0;
 		}
@@ -235,11 +262,11 @@ int rib_ll_add_to_rib(int *route_ret, const rib_entry_t *in_entry, rib_entry_t *
 }
 
 // Expire out old entries out of the rib:
-int rib_ll_remove_expired_entries() {
+int rib_ll_remove_expired_entries(const rip_timers_t *timers, int *delcount) {
 
 	time_t now = time(NULL);
-	time_t expiration_time = now - RIP_ROUTE_TIMEOUT;
-	time_t gc_time = now - RIP_ROUTE_GC_TIMEOUT;
+	time_t expiration_time = now - timers->route_invalid;
+	time_t gc_time = now - timers->route_flush;
 	rib_ll_node_t *cur = head;
 	rib_ll_node_t *last = head;
 	rib_ll_node_t *delnode;
@@ -294,6 +321,7 @@ int rib_ll_remove_expired_entries() {
 				head = cur->next;
 
 				// Free our current node for deletion, and reset current and last to new head node:
+				(*delcount)++;
 				free(cur);
 				cur = head;
 				last = head;
@@ -308,6 +336,7 @@ int rib_ll_remove_expired_entries() {
 				// increment cur:
 				cur = cur->next;
 				// Delete from memory
+				(*delcount)++;
 				free(delnode);
 			}
 

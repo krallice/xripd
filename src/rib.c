@@ -18,6 +18,8 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 	memset(xripd_rib, 0, sizeof(*xripd_rib));
 	xripd_settings->xripd_rib = xripd_rib;
 
+	xripd_rib->size = 0;
+
 	xripd_rib->destroy_rib = &rib_null_destroy_rib;
 
 	// Init our filter:
@@ -45,6 +47,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->dump_rib = &rib_null_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_null_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_null_invalidate_expired_local_routes;
+		xripd_rib->serialise_rib = &rib_null_serialise_rib;
 		xripd_rib->destroy_rib = &rib_null_destroy_rib;
 
 		return 0;
@@ -54,6 +57,7 @@ int init_rib(xripd_settings_t *xripd_settings, uint8_t rib_datastore) {
 		xripd_rib->dump_rib = &rib_ll_dump_rib;
 		xripd_rib->remove_expired_entries = &rib_ll_remove_expired_entries;
 		xripd_rib->invalidate_expired_local_routes = &rib_ll_invalidate_expired_local_routes;
+		xripd_rib->serialise_rib = &rib_ll_serialise_rib;
 		xripd_rib->destroy_rib = &rib_ll_destroy_rib;
 
 		// We can call a function on initialisation:
@@ -105,8 +109,9 @@ static void rib_route_print(const rib_entry_t *in_entry) {
 // 	Optional: del_route will contain rib_entry_t for route to be deleted from the kernel's table
 static void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret, const rib_entry_t *in_entry, rib_entry_t *ins_route, rib_entry_t *del_route) {
 
+	int route_incremental = 0;
 	// Pass argument pointers straight through to the add_to_rib function:
-	(*xripd_settings->xripd_rib->add_to_rib)(add_rib_ret, in_entry, ins_route, del_route);
+	(*xripd_settings->xripd_rib->add_to_rib)(add_rib_ret, in_entry, ins_route, del_route, &route_incremental);
 
 	// Switch on the RIB's return behaviour
 	switch (*add_rib_ret) {
@@ -122,6 +127,7 @@ static void add_entry_to_rib(xripd_settings_t *xripd_settings, int *add_rib_ret,
 			fprintf(stderr, "[rib]: add_to_rib result: INSTALL_NEW. Installing new route.\n");
 #endif
 			// If the route was learnt via network/RIP, install into routing table:
+			xripd_settings->xripd_rib->size += route_incremental;
 			if ( ins_route->origin == RIB_ORIGIN_REMOTE ) {
 				netlink_install_new_route(xripd_settings, ins_route);
 			} else {
@@ -233,9 +239,10 @@ int add_local_route_to_rib(xripd_settings_t *xripd_settings, const struct nlmsgh
 		route_attribute = RTA_NEXT(route_attribute, len);
 	}
 
-	in_entry.rip_msg_entry.afi = AF_INET;
-	in_entry.rip_msg_entry.metric = 0;
-	in_entry.recv_from.sin_addr.s_addr = 0; 
+	in_entry.rip_msg_entry.afi = htons(AF_INET);
+	in_entry.rip_msg_entry.metric = htonl(0);
+	in_entry.recv_from.sin_addr.s_addr = htonl(0); 
+	in_entry.rip_msg_entry.tag = 0;
 	in_entry.recv_time = (*xripd_settings->xripd_rib).last_local_poll;
 	in_entry.origin = RIB_ORIGIN_LOCAL;
 
@@ -311,12 +318,26 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 	rib_entry_t ins_route; // route to add to our kernel table (if any?)
 	rib_entry_t del_route; // route to delete from our kernel table (if any?)
 
+	int delcount = 0;
+
+	// Spawn our rib_out thread:
+	if ( xripd_settings->passive_mode != XRIPD_PASSIVE_MODE_ENABLE ) {
+		pthread_t ribout_thread;
+		pthread_create(&ribout_thread, NULL, &rib_out_spawn, (void *)xripd_settings);
+	} else {
+#if XRIPD_DEBUG == 1
+		fprintf(stderr, "[rib]: Passive mode enabled. No socket communication with the daemon.\n");
+#endif
+	}
+
 	//rib_test_filter_init(xripd_settings->xripd_rib);
 
 	// To start with, add local routes to our RIB:
 #if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib]: Adding Local Kernel Routes to RIB\n");
+	fprintf(stderr, "[rib]: Locking RIB, Adding Local Kernel Routes to RIB\n");
 #endif
+
+	pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 	(*xripd_settings->xripd_rib).last_local_poll = time(NULL);
 	if ( netlink_add_local_routes_to_rib(xripd_settings) == 0 ) {
 #if XRIPD_DEBUG == 1
@@ -324,8 +345,10 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		(*xripd_settings->xripd_rib->dump_rib)();
 #endif
 	}
+	pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
+
 #if XRIPD_DEBUG == 1
-	fprintf(stderr, "[rib]: RIB Main Loop Started\n");
+	fprintf(stderr, "[rib]: Unlocking RIB, Main Loop Started\n");
 #endif
 	// Main loop.
 	// Start recieving routes from xripd-daemon picked up over the network:
@@ -372,11 +395,18 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 					// Pass route through filter, and if success, proceed with adding to rib/kernel:
 					if ( filter_route(xripd_settings->xripd_rib->filter, in_entry.rip_msg_entry.ipaddr, 
 						in_entry.rip_msg_entry.subnet) == XRIPD_FILTER_RESULT_ALLOW ) {
+
+						// Lock, Add Entry, Unlock:
+						pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 						add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
+						pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 					}
 				} else {
+				
 					// Don't worry about filter, process straight through our rib:
+					pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 					add_entry_to_rib(xripd_settings, &add_rib_ret, &in_entry, &ins_route, &del_route);
+					pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 				}
 
 			// Select Timeout triggered, break out of loop:
@@ -386,19 +416,29 @@ void rib_main_loop(xripd_settings_t *xripd_settings) {
 		}
 
 		// Refresh RIB's view of local routes. Invalidate any routes that are no longer local in the RIB:
+		pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 		refresh_local_routes_into_rib(xripd_settings);
+		pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 		
 		// Set Metric = 16 for routes that have exceeded their time to live
-		// TODO: Actually implement a deletion function:
-		(*xripd_settings->xripd_rib->remove_expired_entries)();
+		delcount = 0;
+		pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
+		(*xripd_settings->xripd_rib->remove_expired_entries)(&(xripd_settings->rip_timers), &delcount);
+		pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
+		xripd_settings->xripd_rib->size -= delcount;
 
+#if XRIPD_DEBUG == 1
+		fprintf(stderr, "[rib]: RIB Size: %d\n", xripd_settings->xripd_rib->size);
 		// Dump our RIB only every 5th loop:
 		if ( (dump_count % 5) == 0 ) {
+			pthread_mutex_lock(&(xripd_settings->rib_shared.mutex_rib_lock));
 			(*xripd_settings->xripd_rib->dump_rib)();
+			pthread_mutex_unlock(&(xripd_settings->rib_shared.mutex_rib_lock));
 			dump_count = 1;
 		} else {
 			++dump_count;
 		}
+#endif
 		entry_count = 0;
 	}
 }
