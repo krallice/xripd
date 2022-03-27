@@ -94,7 +94,7 @@ The application is split into 2 seperate processes that are responsible for bare
 There are two IPC channels between the two processes used for transferring data internally:
 
 #### Anonymous Pipe
-As a RIPv2 RESPONSE message is recieved by the daemon by another router, it unpacks the one-or-many rip_msg_entry_t's (aka routes) contained in the UDP datagram, converts these into our internal datastructure rib_entry_t, and sends them to the rib via an anonymouse pipe.
+As a RIPv2 RESPONSE message is recieved by the daemon by another router, it unpacks the one-or-many rip_msg_entry_t's (aka routes) contained in the UDP datagram, converts these into our internal datastructure rib_entry_t, and sends them to the rib via an anonymous pipe.
 
 A pipe provides a method of transferring a stream of bytes through the kernel between two processes. As the rib_entry_t struct is fixed in size, both processes read/write from the pipe in units of rib_entry_t's fixed byte size. This is a rudimentary way of message passing through a stream interface. Cool.
 
