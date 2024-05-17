@@ -1,5 +1,5 @@
 # xripd
-xripd is a RIPv2 daemon implemented in Linux in C. Originally built as a *passive only* implementation, it has now been upgraded to *active* capability - meaning it can now participate in RIPv2 topologies. Interoperability has been tested with Cisco's IOS 'router rip' and the classical linux zebra/ripd daemon.
+xripd is a RIPv2 daemon implemented in Linux in C. Originally built as a passive implementation, it has now been upgraded to active capability; meaning it can now participate in RIPv2 topologies. Interoperability has been tested with Cisco's IOS 'router rip' and the classical linux zebra/ripd daemon.
 
 As a bonus feature, xripd supports the black and whitelisting of inbound/outbound routes.
 
@@ -19,20 +19,20 @@ filter:
 
 ## Why:
 
-I wanted to build something moderately useful that I can run within my home network, that would also allow me to explore the Linux ABI/API, specifically regarding:
+I wanted to build something useful that I can run within my home network, that would also allow me to explore the Linux ABI/API, specifically regarding:
 
 + Socket and Network programming (Async I/O, AF_INET Sockets, the NETLINK API)
 + Inter Process Communication (Anon Pipes, Abstract Unix Domain Sockets)
 + Multiprocessing (fork()ing, POSIX threads, mutexes)
 + Abstractions in C
 
-The code itself is *stupidly over-engineered* as I wanted to pile in as many reasons to play with different things - A readable and performant RIP implementation is not really the point. I'm happy it works at all haha.
+The code itself is overengineed by design as I wanted to pile in as many reasons to play with different low level Linuxthings. A readable and performant RIP implementation is not the point.
 
-I also wanted to build something where I could play with abstractions in C, and have a real-life requirement to implement several datastructures. A RIB is a good chance to play with good, and not so good, datastructures.
+I also wanted to build something where I could play with abstractions in C, and have a real-life requirement to implement several datastructures. A RIB is a good chance to play with implementing different kinds of datastructures.
 
 ## Structure:
 
-The original v1 *passive only* structure of xripd looked like:
+The original v1 passive structure of xripd looked like the below. It was able to learn routes only.
 
 ```
                                rip_msg_entry_t
@@ -59,7 +59,7 @@ network +--------> AF_INET SOCKET+--------> xripd daemon |
                      kernel space        user space
 ```
 
-The current v2 **active** structure of xripd looks like:
+The current v2 active structure of xripd looks like the below. This version is able to advertise routes and participate in the network topology proper.
 ```
                                             sendto()
     RIP^2 UPDATE MSG    +---------------------------------------+
@@ -86,7 +86,7 @@ network +--------> AF_INET SOCKET+--------> xripd daemon | daemon pthread<----->
                                      +                                      +
                      kernel space                   user space                kernel space
 ```
-The application is split into 2 seperate processes that are responsible for barely holding the whole thing together:
+The application is split into 2 seperate processes:
 
 + **xripd-daemon** - Responsible for inbound/outbound communication on the network between other RIP routers.
 + **xripd-rib** - Resonsible for maintaining our RIB in memory, and manipulating the kernel's route table.
@@ -96,10 +96,10 @@ There are two IPC channels between the two processes used for transferring data 
 #### Anonymous Pipe
 As a RIPv2 RESPONSE message is recieved by the daemon by another router, it unpacks the one-or-many rip_msg_entry_t's (aka routes) contained in the UDP datagram, converts these into our internal datastructure rib_entry_t, and sends them to the rib via an anonymous pipe.
 
-A pipe provides a method of transferring a stream of bytes through the kernel between two processes. As the rib_entry_t struct is fixed in size, both processes read/write from the pipe in units of rib_entry_t's fixed byte size. This is a rudimentary way of message passing through a stream interface. Cool.
+A pipe provides a method of transferring a stream of bytes through the kernel between two processes. As the rib_entry_t struct is fixed in size, both processes read/write from the pipe in units of rib_entry_t's fixed byte size. This is a rudimentary way of message passing through a stream interface.
 
 #### AF_UNIX DGRAMs (Control Plane)
-Ok so this one's a little more fun. I decided to play with Abstract Unix Domain Sockets to:
+This one's a little more fun. I decided to play with Abstract Unix Domain Sockets to:
 + Extract routes back from out of our rib to the daemon, AND
 + Function as the **control plane** between both processes.
 
@@ -109,10 +109,10 @@ For instance, if the daemon recieves a RIPv2 REQUEST message, it will send a rib
 + Reply with zero or more datagrams packed with a RIB_CTL_HDR_REPLY header followed by a rib_entry_t route,
 + Finish the *stream* with a RIB_CTL_HDR_ENDREPLY.
 
-This will inform the daemon it can begin processing the data it has recieved. The basic *(and it really is, it's only 2 bytes ..)* rib_ctl header provides a sort of *stream* capability out of a datagram format. Essentially the opposite of the Pipe example. Pretty cool, never done that before.
+This will inform the daemon it can begin processing the data it has recieved. The basic 2 byte rib_ctl header provides a sort of stream capability out of a datagram format. Essentially the opposite of the Pipe example. Pretty cool, never done that before.
 
 #### Mutexes and POSIX Threading
-I decided to spawn seperate threads in both the rib and daemon processes to handle the rib_ctl messaging. Muxtex locking therefore becomes required to ensure *consistency of data* as this throws order of execution prediction out the window. Manipulations of the RIB are protected by a blocking mutex to ensure inbound/outbound RIP messaging is consistent and nothing catches fire. I've never played with these before but they were fun, if not completely unrequired haha.
+I decided to spawn seperate threads in both the rib and daemon processes to handle the rib_ctl messaging. Muxtex locking therefore becomes required to ensure data consistency as this throws order of execution prediction out the window. Manipulations of the RIB are protected by a blocking mutex to ensure inbound/outbound RIP messaging is consistent and nothing catches fire.
 
 ## RIB datastore:
 
@@ -127,7 +127,7 @@ One of the other fun parts of this was abstracting away the implementation of th
    13         void (*destroy_rib)();
    14 
 ```
-This *interface* is then alligned with an underlying implementation at compile time:
+This interface is then alligned with an underlying implementation at compile time:
 ```
          } else if ( rib_datastore == XRIPD_RIB_DATASTORE_LINKEDLIST ) {
  12 
@@ -140,7 +140,7 @@ This *interface* is then alligned with an underlying implementation at compile t
 ```
 This has provided some room to play with different RIB implementations. To date, only one has been implemented:
 
-+ An Unsorted Singularly Linked List (horribly inefficient but functioning..)
++ An Unsorted Singularly Linked List (inefficient but functioning..)
 
 Future planned datastructures include:
 
@@ -152,8 +152,9 @@ Future planned datastructures include:
 Things that might be good to play with in the future:
 
 + Support more than one network interface
-+ Support more of the RIPv2 Spec (Not all optional features outlined in the RFC are implemented. REQUEST message handling is not completely RFC compliant, but good enough to work in my labs. IImplement unsolicited updates.)
-+ Rebuild with a sane design to actually solve the domain of rip and not just muck aroud wasting CPU cycles haha.
++ Support more of the RIPv2 Spec (Not all optional features outlined in the RFC are implemented. REQUEST message handling is not completely RFC compliant, but good enough to work in my labs. Implement unsolicited updates.)
++ Rebuild with a sane design to actually solve the domain of rip and not just muck aroud wasting CPU cycles.
++ Implement more complicated data structures.
 
 ## License:
 
